@@ -1,0 +1,351 @@
+# yaml-language-server: $schema=../../../../.agent-foundry/schemas/agent_payload.schema.json
+#
+# Agent payload manifest -- the SINGLE config contract for this payload
+# =====================================================================
+# The agent-foundry framework knows only the generic envelope
+# (``adapter`` + an opaque ``spec``); it never learns what an "agent" is.
+# Everything agent-specific lives under ``spec`` and is interpreted by the
+# agent payload (payloads/agent/).  Typed via
+# payloads.agent.contracts.AgentPayloadFile (extra="forbid": a misspelled
+# key fails fast).
+#
+#   spec.runtime       -- what the agent executes (llm, prompt, limits, tools)
+#   spec.ui            -- presentation surface + every UI feature toggle
+#   spec.integrations  -- expose the agent to other systems (A2A / MCP server)
+#
+# This file is OPTIONAL: when absent the App deploys the built-in
+# ``agent`` payload with framework defaults.  App *infrastructure*
+# (compute, resources, OBO scopes) lives in config.yml in this folder.
+
+payload:
+  # The payload adapter.  The only built-in adapter today is ``agent``.
+  # The adapter -- not the framework -- owns how its spec maps to the App
+  # container's command / env / wheel extras, so new payloads can be added
+  # without a framework change.
+  adapter: agent
+  # Framework bricks this payload needs. Tracing/observability skip when
+  # omitted (e.g. rest_mcp). Declared here so the framework can error if
+  # a required brick is missing from the instance or skipped. The
+  # warehouse is a dedicated one (`agent-foundry scaffold warehouse`) or
+  # an existing one ([warehouse] mode = "reuse" in foundry.toml).
+  requires: [warehouse, tracing, observability]
+
+  spec:
+    # --- spec.runtime: what the agent executes -----------------------
+    runtime:
+      # SAFE TO CHANGE: which model backs the agent.  kind is
+      # serving_endpoint (e.g. "databricks-claude-sonnet-4-5",
+      # "databricks-meta-llama-3-3-70b-instruct") or model_service: a Unity
+      # Gateway catalog.schema.name (e.g. "system.ai.claude-sonnet-4-5"),
+      # called through /ai-gateway/mlflow/v1.
+      model:
+        kind: serving_endpoint
+        name: "databricks-claude-sonnet-4-5"
+      # SAFE TO CHANGE: free-form. Customise to your domain.
+      system_prompt: |
+        You are a helpful assistant with access to tools.
+        Use the available tools to answer the user's question.
+        If a tool returns an error, explain what happened clearly.
+      # CHANGE WITH CARE: hard caps. Higher = more capable but slower / more $.
+      max_tool_calls_per_turn: 5
+      max_iterations: 50
+      # SAFE TO CHANGE: inject the current timestamp into each user
+      # message (helps tools interpret "yesterday", "this quarter").
+      inject_time_user: true
+      tools:
+        # CHANGE WITH CARE: when true (default), tools are attached
+        # exclusively via MCP servers (mcp_servers/). Set false only for
+        # legacy direct-mode Genie / Vector Search / UC Function tools.
+        mcp_only: true
+        # Where skills come from: the developer's repository and Unity
+        # Catalog skills (both may be on), and each user's own skills.
+        skills:
+          # eager (default) concatenates skill bodies into the prompt;
+          # lazy swaps to a routing index + the _load_skill tool (#98).
+          # Mutually exclusive with context.prompt_cache below: lazy bodies
+          # arrive as tool results behind the cached prefix and are
+          # re-written at full price on every request, so a deploy with
+          # caching on warns and uses eager regardless of what is authored.
+          loading: eager
+          # SAFE TO CHANGE (lazy only): prose above the routing index.
+          # Omit to inherit DEFAULT_SKILL_ROUTING_HEADER.
+          # routing_header: |
+          #   Activate skills via `_load_skill(skill_id=...)`. ...
+          # The skills/ folder.  With enabled: false, skills/ must be empty.
+          repository:
+            enabled: true
+          # Unity Catalog skills next to the repository ones.  refresh_seconds
+          # sets how often the App re-checks the service-principal skills
+          # for edits; unchanged skills keep the prompt cache, 0 reads once.
+          # unity_catalog:
+          #   pinned:
+          #     - fqn: "my_catalog.my_schema.my-skill"
+          #       identity: sp        # or obo
+          #   discovery: { enabled: true, locations: ["my_catalog.my_schema"] }
+          #   refresh_seconds: 900
+          # Each user writes and picks their own skills in the resources
+          # panel.  store: lakebase keeps them in the chat-history Lakebase
+          # (needs ui.chat_history and ui.resources_sidebar); store:
+          # unity_catalog lets users pick from locations instead.
+          user_skills:
+            enabled: true
+            store: lakebase
+            # max_skills: 20
+            # max_skill_md_chars: 20000
+        # MCP servers mount on presence: mcp_servers/*/server.yml files
+        # mount workspace servers, and a gateway block mounts Unity
+        # Gateway MCP services next to them.
+        # mcp:
+        #   gateway:
+        #     pinned:
+        #       - fqn: "system.ai.web_search"
+        #         identity: sp
+        # Rarely-used inline tools (most agents use MCP servers).  The
+        # main use is a `type: python` tool: a module-level callable under
+        # instances/<name>/ (the import root at runtime), run in-process
+        # and attached regardless of mcp_only.  A leading `state` parameter
+        # receives the request-scoped state shared by every python tool in
+        # the run; read it back in finalize.  params_json_schema is
+        # optional (inferred from the signature).
+        # definitions:
+        #   - name: add_signal
+        #     type: python
+        #     description: "Add a signal to the in-progress report spec."
+        #     callable_path: my_report_pkg.tools.add_signal
+      # What fills the context window, and how it is cached.
+      context:
+        # Provider prompt caching: the stable prefix of each request
+        # (tools + system prompt) is billed as a cache read (0.1x) instead
+        # of fresh input.  Claude endpoints only; a no-op elsewhere.
+        prompt_cache:
+          # CHANGE WITH CARE: break-glass switch. Turning this off
+          # restores full-price input tokens on every call -- and is the
+          # only way to keep skills.loading: lazy above.
+          enabled: true
+          # SAFE TO CHANGE: TTL for the deployment-stable prefix, "5m" or
+          # "1h".  Both refresh for free on every hit, so this only
+          # decides how long an *idle* cache survives: "1h" costs more to
+          # write (2x vs 1.25x) and pays off when your traffic has gaps
+          # longer than five minutes.
+          static_ttl: "1h"
+          # SAFE TO CHANGE: TTL for the conversation-history breakpoints.
+          # Omit to use the endpoint default of five minutes.
+          # rolling_ttl: "5m"
+
+        # Data universe: read a UC table function listing the views the
+        # agent can query and render it into the system prompt, so the
+        # agent knows what data exists without spending a tool call.  It
+        # rides in the cached prefix above, so it is nearly free to carry.
+        #
+        # Opt-in: enabled must be set whenever any other field is
+        # authored.  Requires the function to exist -- deploy it with the
+        # sql_function brick first.  The SQL stays adjustable there: the
+        # runtime only issues `SELECT * FROM <function>()` and renders
+        # whatever columns come back, so changing the projection is a
+        # CREATE OR REPLACE FUNCTION, not an app redeploy.
+        #
+        # NOTE: the read uses the app's service principal, so the
+        # function must expose only metadata every user may see.
+        # data_universe:
+        #   enabled: true
+        #   # Bare name resolves against this instance's agent schema.
+        #   function: "get_data_landscape"
+        #   heading: "## Data Universe"
+        #   # Truncation is announced in the block, never silent.
+        #   max_rows: 200
+        #   # On expiry the previous block is served, so this is a
+        #   # latency budget, not a correctness one.
+        #   timeout_seconds: 30
+        #   # Re-read interval.  Only costs a cache write if the content
+        #   # actually changed; 0 pins the block for the process.
+        #   refresh_minutes: 60
+
+        # Tool-result clearing: replace older tool outputs with a short
+        # placeholder before each model call so long conversations stay
+        # focused.  The full chat transcript is untouched; only the
+        # in-flight model request is rewritten.  Works the same on Claude,
+        # GPT and open-weights endpoints.
+        tool_result_clearing:
+          # CHANGE WITH CARE: break-glass switch.  Turning this off lets
+          # tool outputs accumulate in every subsequent model call.
+          enabled: true
+          # SAFE TO CHANGE: how many recent rounds of tool calls keep their
+          # results verbatim (one round = one model call's parallel calls).
+          keep_tool_uses: 3
+          # Clearing arms on EITHER of the two thresholds below.
+          #
+          # SAFE TO CHANGE: savings-available trigger.  Do not clear unless
+          # replacing all eligible results recovers at least this many
+          # characters.  Set high on purpose: every clearing pass rewrites
+          # the middle of the message list, which breaks the prompt-cache
+          # prefix and re-bills the rest at write price.  Lowering it trades
+          # the cache discount for headroom you probably do not need yet.
+          clear_at_least_chars: 300000
+          # CHANGE WITH CARE: occupancy trigger, in estimated prompt tokens.
+          # The in-turn emergency valve: compaction below only runs between
+          # turns, so this clears every eligible result once one long turn
+          # brings the request close to the model's window -- the only thing
+          # standing between it and an unrecoverable "prompt is too long"
+          # error.  Keep it above the compaction trigger.  Sized for a 200k
+          # window; LOWER IT for endpoints with a smaller one.  0 disables.
+          clear_above_input_tokens: 150000
+
+        # Conversation compaction: once a chat grows past the trigger, the
+        # chat UI summarizes the older turns into a summary stored in
+        # Lakebase and sends that instead.  The chat still shows every
+        # message.  On wherever ui.chat_history is on; uncomment to tune.
+        # compaction:
+        #   # SAFE TO CHANGE: estimated prompt tokens that start a compaction.
+        #   # Must stay below clear_above_input_tokens.  Unset: 120000, or
+        #   # the clearing threshold - 20000 if that is smaller.
+        #   trigger_input_tokens: 120000
+        #   # SAFE TO CHANGE: recent user turns kept verbatim.
+        #   keep_recent_turns: 3
+        #   # SAFE TO CHANGE: extra rules for the summary (max 2000 chars).
+        #   instructions: "Keep ticket IDs and customer names."
+        #   # SAFE TO CHANGE: show "Compact conversation" in the chat header.
+        #   manual_action: false
+
+        # SAFE TO CHANGE: a goal and milestones the agent keeps for
+        # multi-step work in a chat and sees before every model call;
+        # deleted with the chat.  Needs ui.chat_history.  Off by default.
+        # plan:
+        #   enabled: true
+
+        # Agent memory: facts about the user and their environment the
+        # agent saves and recalls with tools, across all of the user's
+        # chats; kept per user in the chat-history Lakebase.  Needs
+        # ui.chat_history.  Off by default; uncomment to enable.
+        # memory:
+        #   enabled: true
+
+      # Optional instance-dir hooks (dotted paths under instances/<name>/).
+      # reset runs at request start; finalize's returned dict is merged into
+      # custom_outputs after the run. Omit both for no extra lifecycle.
+      # finalize: my_instance.hooks.finalize
+      # reset: my_instance.hooks.reset
+
+      # Thinking models (e.g. "databricks-claude-sonnet-5-5"): how the
+      # model thinks and whether its reasoning reaches the user.  Every
+      # field is optional -- unset sends nothing and the endpoint default
+      # applies, so non-thinking models are unaffected.  Combinations a
+      # named model is known to reject fail at load (payload contract);
+      # anything else comes back as a 400 from the model.
+      # reasoning:
+      #   # SAFE TO CHANGE: adaptive | between_tools | enabled | disabled.
+      #   # Claude 5.x (Sonnet/Haiku/Opus 5 on FMAPI and Unity Gateway)
+      #   # rejects enabled and disabled: use adaptive, and effort to
+      #   # scale thinking.  budget_tokens is not available on that family.
+      #   thinking: adaptive
+      #   # Required with thinking: enabled, and only allowed there; must be
+      #   # smaller than model_settings.extra_body.max_tokens (an integer) when
+      #   # that is set.  Not valid with adaptive.
+      #   # budget_tokens: 10240
+      #   # SAFE TO CHANGE: summarized | omitted -- whether the reasoning
+      #   # comes back as readable text.  Defaults to summarized while emit
+      #   # is on (newer models return it empty otherwise).  Not allowed
+      #   # with thinking: between_tools or disabled.
+      #   display: summarized
+      #   # SAFE TO CHANGE: none | minimal | low | medium | high | xhigh | max.
+      #   # On Claude 5.x this is the supported thinking budget (sent as
+      #   # reasoning_effort).
+      #   effort: medium
+      #   # SAFE TO CHANGE: stream the reasoning on /invocations; the chat
+      #   # UI shows it as a collapsible section.  Callers can override it
+      #   # per request with custom_inputs: {"include_reasoning": false}.
+      #   emit: true
+
+      # Raw chat-completions request settings the typed blocks lack,
+      # merged into every request body unvalidated (e.g. max_tokens,
+      # temperature).  Keys owned elsewhere (model, messages, tools,
+      # thinking, reasoning_effort, ...) are rejected at load time.
+      # model_settings:
+      #   extra_body:
+      #     max_tokens: 16000
+
+    # --- spec.ui: presentation surface + feature toggles -------------
+    ui:
+      enabled: true
+      kind: chat
+      # Persistent chat history via Lakebase Autoscaling (default ON).
+      chat_history:
+        enabled: true
+        # project_name: "my-agent-lakebase"  # optional Lakebase override
+        # Sidebar lists chats created in the last N days (null: all).
+        sidebar_days: 30
+        # Delete chats whose last message is older than N days (null: keep
+        # forever).  Must be >= sidebar_days.
+        retention_days: 365
+      file_upload:
+        enabled: true
+        # max_mb: 10  # hard upload size cap (default 10)
+        # PNG / JPEG / WebP go to the model as images; needs a vision model.
+        images: true
+      feedback:
+        enabled: true
+      charts:
+        enabled: true
+      # How tool-call panels render.  A behavioural mode, not a mount
+      # toggle: the panels are always there, this only decides whether
+      # each one starts expanded.  Collapsed keeps the answer visible
+      # when a turn makes several tool calls; users can still click any
+      # header to inspect that call.
+      tool_output:
+        expanded: false
+      # How wide the chat column may grow (a cap, not a fixed size: a
+      # narrow window still shrinks it).  One of 4xl (896px), 5xl
+      # (1024px), 6xl (1152px) or 7xl (1280px).  The empty state, the
+      # message list and the composer share it.  Wider suits big
+      # monitors, tables and code; long prose reads better narrower.
+      chat_layout:
+        width: 4xl
+      # Side panel listing the agent's MCPs and skills, the user's own
+      # skills (runtime.tools.skills.user_skills), and the Unity Gateway
+      # ones a user may add (needs a gateway user_catalog).
+      resources_sidebar:
+        enabled: true
+      # Mic button in the composer: the recording is transcribed into the
+      # input box for review, never sent automatically.  `agent-foundry
+      # scaffold speech_input` adds the Whisper endpoint (one T4 GPU) that
+      # the Model Serving brick builds and deploys.
+      speech_input:
+        enabled: false
+        # backend: serving_invocations
+        # endpoint: ${var.serving_endpoint_name__speech}
+        # max_seconds: 300        # 1..300
+        # language: de            # hint; unset = browser language
+
+    # --- spec.integrations: expose the agent to other systems --------
+    integrations:
+      # Expose the agent via an A2A agent card at
+      # /api/.well-known/agent-card.json.  ``enabled`` mounts the routes;
+      # ``card`` is the content (omit ``card`` to ship the generic
+      # fallback card).  Distinct from the internal skills/ directory.
+      a2a:
+        enabled: false
+        # enable_v0_3_compat: false
+        # card:
+        #   name: "My Agent"
+        #   description: "What this agent does, from an external client's POV."
+        #   version: "1.0.0"
+        #   capabilities:
+        #     streaming: true
+        #   default_input_modes: ["text"]
+        #   default_output_modes: ["text"]
+        #   skills:
+        #     - id: "ask_anything"
+        #       name: "Ask Anything"
+        #       description: "Natural-language Q&A over the agent's knowledge."
+        #       tags: ["general"]
+        #       examples: ["What is the revenue for Q4?"]
+      # Expose the agent AS an MCP server (mount /mcp for other systems to
+      # consume).  The consumption half (the agent USING external MCP
+      # servers) is presence-based via mcp_servers/ -- no toggle here.
+      mcp_server:
+        enabled: false
+
+    # --- spec.extensions: config for agent extensions ----------------
+    # Opaque to the agent payload.  A wrapping payload adapter (set as
+    # ``adapter:`` above) reads and validates its own block here; see
+    # docs/how-to/author-a-payload.md "Extend the agent payload".
+    extensions: {}

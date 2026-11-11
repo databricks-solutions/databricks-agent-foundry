@@ -1,0 +1,51 @@
+# Table Definitions
+# =================
+# List all Unity Catalog tables available to this Genie Space.
+# Identifiers MUST use three-level namespace: catalog.schema.table
+# Recommended: 5-7 tables per space (hard limit: 30).
+#
+# Column config options:
+#   enable_entity_matching   - (HIGH IMPACT) resolve user terms to actual values
+#                              e.g. "Florida" -> "FL", "open" -> "OPEN"
+#                              Best for: categorical columns (status, region, type)
+#   enable_format_assistance - show example values to guide user input formatting
+#                              Best for: identifiers, names, codes
+#   exclude                  - hide column from Genie entirely
+#                              Best for: internal ETL columns, PIIs, row hashes
+#   description              - override the Unity Catalog column comment
+#   synonyms                 - alternative names users might use for this column
+#
+# The alias used in join_specs and sql_snippets defaults to the table's
+# last segment (e.g., "orders" for "catalog.schema.orders").
+
+tables:
+  - identifier: "system.information_schema.columns"
+    description: "Column metadata for all tables the current user can access"
+    column_configs:
+      - column_name: data_type
+        enable_entity_matching: true
+        enable_format_assistance: true
+      - column_name: is_nullable
+        enable_entity_matching: true
+      - column_name: table_catalog
+        enable_format_assistance: true
+      - column_name: table_name
+        enable_format_assistance: true
+      - column_name: table_schema
+        enable_format_assistance: true
+
+  - identifier: "system.information_schema.tables"
+    description: "Table metadata for all tables the current user can access"
+    column_configs:
+      - column_name: table_catalog
+        enable_format_assistance: true
+      - column_name: table_name
+        enable_format_assistance: true
+      - column_name: table_schema
+        enable_format_assistance: true
+      - column_name: table_type
+        enable_entity_matching: true
+        enable_format_assistance: true
+
+  # Add more tables as needed. Keep identifiers sorted alphabetically
+  # for deterministic assembly (assemble.py sorts them automatically).

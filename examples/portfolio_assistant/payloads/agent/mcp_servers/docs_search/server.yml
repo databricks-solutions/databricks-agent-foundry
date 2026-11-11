@@ -1,0 +1,45 @@
+# MCP Server: docs_search (managed_vector_search)
+# =================================================
+# Wraps the docs_search vector index (deployed by the
+# vector_indexes/docs_search/ brick) behind a Databricks Managed
+# Vector Search MCP server.  Replaces the legacy `type: vector_search`
+# direct-SDK skill tools.
+#
+# URL pattern: {host}/api/2.0/mcp/vector-search/{catalog}/{schema}
+# The catalog/schema must match the index's UC location, which the
+# vector_indexes brick deploys to:
+#   ${var.catalog}.${var.schema_prefix}_indexes.docs_index
+# (see vector_indexes/docs_search/index_config.yml).
+
+type: managed_vector_search
+description: >
+  Semantic search over the Databricks documentation corpus.  Covers
+  Unity Catalog, Delta Lake, MLflow, Vector Search, data ingestion,
+  and related topics.  Use for "what is" / "how does" /
+  "documentation" / "explain" requests.
+
+catalog: "${var.catalog}"
+schema: "${var.schema_prefix}_indexes"
+
+# ---------------------------------------------------------------------------
+# Tools
+# ---------------------------------------------------------------------------
+# Discovered via `agent-foundry brick mcp inspect docs_search
+# --instance portfolio-assistant --target dev`.  Managed Vector Search
+# exposes one tool per index, with the upstream name embedding the
+# catalog and schema:
+#   - <catalog>__<schema>__docs_index
+#
+# We tail-glob to keep the allow-list deploy-portable (catalog/schema
+# come from variables) and rename to a clean alias.  LLM sees
+# `docs_search__docs_index`.
+tools:
+  allow:
+    - match: "*__*__docs_index"
+      expose_as: docs_index
+  default_meta:
+    columns: "id,content,source,category,doc_uri"
+    include_score: true
+    num_results: 10
+    query_type: "HYBRID"
+    score_threshold: 0.5

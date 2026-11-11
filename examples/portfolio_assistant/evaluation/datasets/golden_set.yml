@@ -1,0 +1,148 @@
+# Golden Evaluation Dataset for portfolio-assistant
+# ==================================================
+# Seed dataset bootstrapped from Genie Space and Vector Search benchmarks.
+# Extend with real user questions after reviewing MLflow traces.
+#
+# Tool name reference (from payloads/agent/runtime/tools.py):
+#   - Genie:          "query_genie"   — substring match "genie" works
+#   - Vector Search:  "docs_index"    — auto-generated from UC index name
+#
+# The tool_routing_accuracy scorer uses substring matching, so expected
+# tool names only need to be substrings of the actual span names.
+#
+# Workflow:
+#   1. Run evaluation with this local YAML to establish a baseline
+#   2. Review traces in MLflow UI, label good/bad via the Review App
+#   3. Export labeled traces as a UC EvaluationDataset or Delta table
+#   4. Switch eval_config.yml to point at the UC dataset
+#
+# Usage:
+#   python bricks/evaluation/scripts/run_evaluation.py \
+#       --instance portfolio-assistant --target dev
+
+dataset:
+  # ---------------------------------------------------------------------------
+  # Genie Space routing — questions that should invoke query_genie
+  # ---------------------------------------------------------------------------
+  - inputs:
+      question: "How many tables are in system.information_schema?"
+    expectations:
+      expected_tools: ["genie"]
+      expected_facts:
+        - "The response should contain a numeric count of tables"
+        - "The answer is about system.information_schema"
+      expected_sql: |
+        SELECT table_count
+        FROM schema_summary
+        WHERE table_catalog = 'system'
+          AND table_schema = 'information_schema'
+
+  - inputs:
+      question: "What data types are used in system.information_schema.tables?"
+    expectations:
+      expected_tools: ["genie"]
+      expected_facts:
+        - "The response should list data types used in the tables table"
+        - "The response should include column counts per data type"
+      expected_sql: |
+        SELECT data_type, COUNT(*) AS column_count
+        FROM catalog_objects
+        WHERE table_name = 'tables'
+        GROUP BY data_type
+        ORDER BY column_count DESC
+
+  - inputs:
+      question: "Show me all schemas in the main catalog"
+    expectations:
+      expected_tools: ["genie"]
+      expected_facts:
+        - "The response should list schema names from the main catalog"
+
+  - inputs:
+      question: "Which tables have the most columns?"
+    expectations:
+      expected_tools: ["genie"]
+      expected_facts:
+        - "The response should list tables ranked by column count"
+
+  # ---------------------------------------------------------------------------
+  # Vector Search routing — questions that should invoke docs_index
+  # ---------------------------------------------------------------------------
+  - inputs:
+      question: "What is Unity Catalog?"
+    expectations:
+      expected_tools: ["docs_index"]
+      expected_facts:
+        - "Unity Catalog is a governance solution for data and AI assets"
+
+  - inputs:
+      question: "How does Delta Lake handle ACID transactions?"
+    expectations:
+      expected_tools: ["docs_index"]
+      expected_facts:
+        - "Delta Lake provides ACID transaction guarantees"
+
+  - inputs:
+      question: "How do I create a vector search index?"
+    expectations:
+      expected_tools: ["docs_index"]
+      expected_facts:
+        - "The response should describe steps to create a vector search index"
+
+  - inputs:
+      question: "What is MLflow and how does experiment tracking work?"
+    expectations:
+      expected_tools: ["docs_index"]
+      expected_facts:
+        - "MLflow is a platform for managing the ML lifecycle"
+        - "The response should mention experiment tracking"
+
+  - inputs:
+      question: "How do I ingest data into Databricks from external sources?"
+    expectations:
+      expected_tools: ["docs_index"]
+      expected_facts:
+        - "The response should describe data ingestion methods"
+
+  # ---------------------------------------------------------------------------
+  # Multi-tool routing — questions needing both Genie and Vector Search
+  # ---------------------------------------------------------------------------
+  - inputs:
+      question: "Compare the number of tables in system.information_schema with what the documentation says about system tables"
+    expectations:
+      expected_tools: ["genie", "docs_index"]
+      expected_facts:
+        - "The response should include a count from the Genie query"
+        - "The response should reference documentation about system tables"
+
+  - inputs:
+      question: "Look up how Delta Lake works and then show me which tables use delta format"
+    expectations:
+      expected_tools: ["genie", "docs_index"]
+      expected_facts:
+        - "The response should explain Delta Lake concepts"
+        - "The response should list tables using delta format"
+
+  # ---------------------------------------------------------------------------
+  # Edge cases — no tool needed, or out-of-scope
+  # ---------------------------------------------------------------------------
+  - inputs:
+      question: "Hello, how are you?"
+    expectations:
+      expected_tools: []
+      expected_facts:
+        - "The response should be a friendly greeting"
+
+  - inputs:
+      question: "What is 2 + 2?"
+    expectations:
+      expected_tools: []
+      expected_facts:
+        - "The answer should be 4"
+
+  - inputs:
+      question: "Can you write Python code to sort a list?"
+    expectations:
+      expected_tools: []
+      expected_facts:
+        - "The response should include Python code for sorting a list"

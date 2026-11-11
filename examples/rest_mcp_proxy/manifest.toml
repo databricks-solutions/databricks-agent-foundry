@@ -1,0 +1,9 @@
+# Variant manifest for ``agent-foundry init``.
+#
+# Discovered automatically by ``agent_foundry.init.examples_registry``; the
+# wizard renders ``display_name`` + ``description`` in its starter menu.  No
+# framework code edits are needed to add a new variant -- just create
+# ``examples/<variant>/manifest.toml`` alongside the per-instance tree.
+
+display_name = "REST-to-MCP Proxy"
+description = "Config-only proxy: expose the public GitHub REST API as a governed MCP server (no agent)"

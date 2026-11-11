@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=../../../../../../.agent-foundry/schemas/mcp_server_config.schema.json
+#
+# MCP Server: sql_warehouse (managed_sql)
+# =======================================
+# The workspace half of this example's MCP setup: read-only SQL on the
+# warehouse/ brick's warehouse, mounted next to the Unity Gateway services
+# in payload.yml.  It runs as the signed-in user (OBO), so queries see only
+# the data that user may read.
+#
+# URL pattern: {host}/api/2.0/mcp/sql
+
+type: managed_sql
+description: >
+  Read-only SQL on the example's SQL warehouse, as the signed-in user.
+  Use for exact rows, JOINs and aggregations; prefer Genie for broad
+  natural-language questions about data.
+
+# The LLM sees ``sql_warehouse__execute_sql_read_only`` and
+# ``sql_warehouse__poll_sql_result``; ``execute_sql`` (writes) stays out.
+tools:
+  allow:
+    - execute_sql_read_only
+    - poll_sql_result
+  default_meta:
+    warehouse_id: "${var.warehouse_id}"

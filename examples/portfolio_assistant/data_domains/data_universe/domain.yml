@@ -1,0 +1,20 @@
+# Data Domain: data_universe
+# ==========================
+# The two landscape tables behind get_data_landscape() /
+# get_table_metadata(). Only their DDL lives here -- the rows are written
+# by jobs/data_universe_profile.
+#
+# This exists to break an ordering cycle. The bricks deploy in the order
+# data -> sql_function -> job, and a UC function body is validated at
+# CREATE time, so the functions cannot be created before the tables they
+# read exist -- while the job that would create them runs last. Declaring
+# the empty tables here puts them in place first. Same split as
+# docs_corpus, whose table is declared as DDL and filled by docs_ingest.
+#
+# Deployed into the agent schema, not a views schema, because that is
+# where the functions reading them live.
+
+domain:
+  name: data_universe
+  catalog: "${var.catalog}"
+  schema: "${var.schema_prefix}_agent"

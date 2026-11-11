@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=../../../../.agent-foundry/schemas/job_config.schema.json
+
+name: "${var.target_name}-${var.app_name}-docs-ingest"
+description: "Ingest uploaded documentation and refresh the docs Vector Search index"
+
+tasks:
+  - task_key: ingest_docs
+    notebook_task:
+      notebook_path: ./notebooks/ingest_docs.py
+      base_parameters:
+        catalog: "${var.catalog}"
+        schema: "${var.schema_prefix}_indexes"
+        volume: docs_sources
+        table: docs
+        vs_index: "${var.vs_index_name__docs_search}"
+    timeout_seconds: 1800
+    max_retries: 1
+
+trigger:
+  file_arrival:
+    url: "/Volumes/${var.catalog}/${var.schema_prefix}_indexes/docs_sources/"
+    min_time_between_triggers_seconds: 60
+    wait_after_last_change_seconds: 61
+  pause_status: UNPAUSED
+
+tags:
+  workload: docs-ingest

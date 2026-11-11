@@ -1,0 +1,99 @@
+# Node — `node_modules/` is fully ignored everywhere.  The TS test harness
+# under bricks/app/tests/ts intentionally has no committed lockfile:
+# npm bakes the install-time registry URL into every `resolved` field, and
+# committing one generated against the Databricks-internal proxy would
+# break installs in downstream forks that don't have access.  (Scoped to
+# that one path so other future Node projects can still commit their own
+# lockfiles.)
+node_modules/
+/bricks/app/tests/ts/package-lock.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+.coverage
+coverage.xml
+
+# Local sim/scratch output (chart gallery + per-fixture option JSONs)
+.cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Databricks
+.databricks/
+
+# Local Graphify (machine-only analysis cache; never commit)
+graphify-out/
+.graphifyrc
+.graphifyignore
+.cursor/rules/graphify.mdc
+.cursor/skills/graphify/
+*.whl
+
+# Genie Space build artifacts and deploy state
+_build/
+_state/
+
+# Secrets
+.env
+.env.*
+!.env.example
+credentials.json
+*.pem
+*.key
+
+# Instance build artifacts and deploy state (generated, never commit)
+instances/*/_build/
+instances/*/_state/
+instances/*/**/_build/
+instances/*/**/_state/
+
+# MLflow local artifacts
+mlruns/
+mlflow.db
+
+# Temporary
+*.log
+tmp/
+
+# Customer specific files
+scoping.md
+customer-local/
+
+# Local research notes (planning artifacts, not source of truth)
+.research/
+
+# Local voice recordings for speech-to-text spikes (personal data, never commit)
+/audio/
+
+# Local design/planning artifacts (working notes, kept out of the tree)
+docs/refactoring/
+docs/architecture-redesign.md
+docs/explanation/adr/0002-distribution-and-compatibility-model.md
+
+# Internal-only docs (not part of the public documentation tree)
+docs/executive_summary.md
+
+# Locally synced JSON Schemas for editor YAML/TOML language servers.
+# The source of truth lives under ``agent_foundry/schemas/`` (committed).
+# Contributors run ``uv run agent-foundry sync-schemas`` once after
+# cloning so the ``$schema=../../../.agent-foundry/schemas/...`` headers
+# in scaffolds/examples resolve. Never commit the generated copy.
+.agent-foundry/

@@ -1,0 +1,11 @@
+# One-record smoke set so ``agent-foundry eval`` has something to score
+# after ``scaffold evaluation``. Copied from the portfolio-assistant
+# greeting example (no Genie / Vector Search required).
+
+dataset:
+  - inputs:
+      question: "Hello, how are you?"
+    expectations:
+      expected_tools: []
+      expected_facts:
+        - "The response should be a friendly greeting"

@@ -1,0 +1,7 @@
+# Extra questions for `agent-foundry smoke` (after deploy + wait).
+# Each must get a non-empty answer from the deployed App over /invocations;
+# the wording is not checked. One per integration this example adds:
+# Genie analytics and Vector Search docs retrieval.
+questions:
+  - "How many tables are in system.information_schema?"
+  - "What is Unity Catalog?"

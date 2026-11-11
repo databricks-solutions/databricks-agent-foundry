@@ -1,0 +1,36 @@
+# Merged into the scaffolded payloads/agent/payload.yml (see testing/fixtures.py).
+# Keeps the payload canary on the knobs it is exercised with by hand, so
+# feature interactions show up in CI as well:
+#   - Sonnet 5.5 with adaptive thinking (Claude 5.x rejects enabled/disabled);
+#   - prompt caching on, as scaffolded, so traces show cache reads and
+#     writes; skills load eager (lazy would be overridden anyway);
+#   - context thresholds low enough that compaction (#637) is reachable in
+#     a short conversation, and clearing, the in-turn emergency valve, in
+#     one tool-heavy turn; compaction stays below clearing as scaffolded;
+#   - long-term memory and the per-chat plan, each checked by a smoke probe;
+#   - speech input on the Whisper endpoint of the ``speech_input`` scaffold
+#     (model_serving/speech), checked by a synthetic-clip smoke probe.
+payload:
+  spec:
+    ui:
+      speech_input:
+        enabled: true
+        endpoint: ${var.serving_endpoint_name__speech}
+    runtime:
+      model:
+        kind: serving_endpoint
+        name: databricks-claude-sonnet-5-5
+      reasoning:
+        thinking: adaptive
+        effort: medium
+        emit: true
+      context:
+        tool_result_clearing:
+          clear_above_input_tokens: 60000
+        compaction:
+          trigger_input_tokens: 30000
+          keep_recent_turns: 2
+        plan:
+          enabled: true
+        memory:
+          enabled: true

@@ -1,0 +1,22 @@
+# Pre-commit hooks for agent-foundry.  Mirrors the CI lint job
+# (.github/workflows/ci.yml) so violations are caught locally before
+# they reach a PR.  Issue #201 / epic #224.
+#
+# Setup (one-time, per clone):
+#
+#     uv pip install --system pre-commit  # or: pip install pre-commit
+#     pre-commit install
+#
+# Manual run across the whole repo:
+#
+#     pre-commit run --all-files
+#
+# The ruff version is pinned to match uv.lock so local pre-commit and
+# CI agree on the rule set.  Bump both together when upgrading ruff.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format

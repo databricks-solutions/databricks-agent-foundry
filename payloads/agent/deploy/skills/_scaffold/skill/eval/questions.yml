@@ -1,0 +1,29 @@
+# Evaluation Dataset
+# ==================
+# Minimum 3 questions per skill. Used by the evaluation brick
+# for per-skill scoring.
+#
+# Each question should cover:
+#   1. Happy path (normal usage)
+#   2. Edge case (missing data, ambiguous input)
+#   3. Knowledge question (process documentation lookup)
+
+questions:
+  - input: "Example happy path question"
+    expected_tools:
+      - tool_name_1
+    expected_output_contains:
+      - "expected keyword 1"
+      - "expected keyword 2"
+
+  - input: "Example edge case question"
+    expected_tools:
+      - tool_name_1
+    expected_output_contains:
+      - "no data"
+
+  - input: "Example knowledge question about the process"
+    expected_tools:
+      - tool_name_2
+    expected_output_contains:
+      - "process term"

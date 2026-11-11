@@ -1,0 +1,29 @@
+# Metric View Definitions (Optional)
+# ===================================
+# Metric views are pre-aggregated tables registered in Unity Catalog
+# that enforce consistent KPI definitions. Genie treats them like
+# regular tables but they typically have fewer columns and faster
+# query times due to pre-aggregation.
+#
+# Use metric views when you need strict KPI consistency across users.
+# For ad-hoc exploration, regular tables with sql_snippets are often
+# sufficient.
+#
+# Same column_config options as tables.yml apply here.
+
+metric_views: []
+  # - identifier: "${var.catalog}.${var.schema}.monthly_sales_metrics"
+  #   description: "Pre-aggregated monthly revenue, order count, and AOV by region"
+  #   column_configs:
+  #     - column_name: region
+  #       enable_entity_matching: true
+  #       enable_format_assistance: true
+  #     - column_name: month
+  #       enable_format_assistance: true
+  #       description: "First day of the month (DATE)"
+  #     - column_name: total_revenue
+  #       description: "Sum of order_amount for the month/region"
+  #     - column_name: order_count
+  #       description: "Distinct order count for the month/region"
+  #     - column_name: avg_order_value
+  #       description: "Average order amount (total_revenue / order_count)"

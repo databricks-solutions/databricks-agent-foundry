@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "ModelBuildConfig": {
+      "additionalProperties": false,
+      "description": "Serverless job that logs and registers a new version of ``model.name``.\n\nThe script receives ``--model-name`` and ``--experiment`` and must\nregister exactly one new version.  It reruns when the script, a\nlisted file, or a dependency changes.",
+      "properties": {
+        "dependencies": {
+          "description": "pip requirements of the serverless job.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "environment_version": {
+          "default": "3",
+          "description": "Serverless environment version (sets Python).",
+          "title": "Environment Version",
+          "type": "string"
+        },
+        "files": {
+          "description": "Extra ./ files uploaded next to the script.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "script": {
+          "description": "Python file relative to the sub-instance (./...).",
+          "pattern": "^\\./",
+          "title": "Script",
+          "type": "string"
+        },
+        "timeout_minutes": {
+          "default": 60,
+          "maximum": 240,
+          "minimum": 5,
+          "title": "Timeout Minutes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "script"
+      ],
+      "title": "ModelBuildConfig",
+      "type": "object"
+    },
+    "ServedModelConfig": {
+      "additionalProperties": false,
+      "description": "The UC model the endpoint serves and the compute it runs on.",
+      "properties": {
+        "alias": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alias"
+        },
+        "environment_vars": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Environment Vars",
+          "type": "object"
+        },
+        "name": {
+          "description": "Three-level UC model name: catalog.schema.model.",
+          "pattern": "^[^.\\s]+\\.[^.\\s]+\\.[^.\\s]+$",
+          "title": "Name",
+          "type": "string"
+        },
+        "scale_to_zero": {
+          "default": true,
+          "title": "Scale To Zero",
+          "type": "boolean"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        },
+        "workload_size": {
+          "default": "Small",
+          "enum": [
+            "Small",
+            "Medium",
+            "Large"
+          ],
+          "title": "Workload Size",
+          "type": "string"
+        },
+        "workload_type": {
+          "default": "CPU",
+          "enum": [
+            "CPU",
+            "CPU_MEDIUM",
+            "CPU_LARGE",
+            "GPU_SMALL",
+            "GPU_MEDIUM",
+            "GPU_LARGE",
+            "MULTIGPU_MEDIUM"
+          ],
+          "title": "Workload Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ServedModelConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Root of ``endpoint_config.yml``.",
+  "properties": {
+    "build": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModelBuildConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "endpoint_name": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$",
+      "title": "Endpoint Name",
+      "type": "string"
+    },
+    "model": {
+      "$ref": "#/$defs/ServedModelConfig"
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "object"
+    }
+  },
+  "required": [
+    "endpoint_name",
+    "model"
+  ],
+  "title": "ServingEndpointConfig",
+  "type": "object"
+}

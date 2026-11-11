@@ -1,0 +1,91 @@
+# yaml-language-server: $schema=../../../../.agent-foundry/schemas/vector_search_index_config.schema.json
+#
+# Vector Search Index Configuration
+# ==================================
+# Defines a single Vector Search index instance. Copy this directory to
+# instances/<app>/vector_indexes/<name>/ and customize.
+#
+# Variable substitution: use ${var.<name>} for values from foundry.toml
+# (repo-root [targets.<target>] and the instance file) or --vars overrides.
+#
+# The agent reaches this index through a managed_vector_search MCP
+# server: payloads/agent/mcp_servers/<name>/server.yml with the
+# index's catalog and schema.
+#
+# tool_name (optional, deprecated): binds a legacy skill tools.yml
+# entry (`type: vector_search`) to this index; removed with that format.
+# tool_name: "docs_search"
+
+# ── Endpoint ─────────────────────────────────────────────────────────────
+# Endpoints are shared across indexes. The deploy script creates the
+# endpoint only if it doesn't already exist.
+endpoint:
+  name: "${var.vs_endpoint_name}"
+  # STANDARD          -- dedicated compute, consistent latency, supports target_qps
+  # STORAGE_OPTIMIZED -- large-scale (1B+ vectors), triggered-sync only
+  endpoint_type: "STANDARD"
+  # Optional endpoint knobs (only sent to the API when set):
+  # target_qps: 500              # best-effort high-throughput target (STANDARD only)
+  # budget_policy_id: ""         # attach to a Databricks budget policy
+  # usage_policy_id: ""          # attach to a Databricks usage policy
+
+# ── Index ────────────────────────────────────────────────────────────────
+index:
+  # Three-level Unity Catalog name: catalog.schema.index_name
+  name: "${var.catalog}.${var.schema}.${var.index_name}"
+  primary_key: "id"
+
+  # DELTA_SYNC   -- auto-syncs with a source Delta table
+  # DIRECT_ACCESS -- user-managed CRUD via REST/SDK
+  index_type: "DELTA_SYNC"
+
+  # ── Delta Sync configuration ───────────────────────────────────────
+  # Required when index_type = DELTA_SYNC.
+  # The source table must have Change Data Feed enabled.
+  delta_sync:
+    source_table: "${var.catalog}.${var.schema}.${var.source_table}"
+
+    # TRIGGERED   -- one-time sync, re-trigger manually or on schedule
+    # CONTINUOUS  -- streams changes in near real-time
+    pipeline_type: "TRIGGERED"
+
+    # Columns to sync. Omit to sync ALL columns from the source table.
+    # The primary_key and embedding source columns are always synced.
+    columns_to_sync:
+      - "id"
+      - "content"
+      - "source"
+      - "doc_uri"  # Citation URI, e.g. /Volumes/catalog/schema/volume/file.pdf
+      # - "metadata"
+
+    # Embeddings: choose EXACTLY ONE of the two options below.
+    #
+    # Option A: Databricks-managed embeddings (recommended)
+    # The platform computes embeddings using a Foundation Model API endpoint.
+    embedding_source_columns:
+      - name: "content"
+        embedding_model_endpoint_name: "databricks-gte-large-en"
+        # model_endpoint_name_for_query: ""  # optional: different model for queries
+
+    # Option B: Build from a Delta table that ALREADY has embedding vectors.
+    # You pre-compute the vectors yourself and store them in a column of the
+    # source table; Databricks just indexes them (no model endpoint needed).
+    # Uncomment this block and remove the embedding_source_columns above.
+    # embedding_vector_columns:
+    #   - name: "embedding"
+    #     embedding_dimension: 1024
+
+    # Optional: write computed embeddings back to a Delta table
+    # embedding_writeback_table: "${var.catalog}.${var.schema}.${var.source_table}_writeback"
+
+  # ── Direct Access configuration ────────────────────────────────────
+  # Required when index_type = DIRECT_ACCESS. Uncomment and remove delta_sync above.
+  # direct_access:
+  #   schema_json: '{"id": "int", "content": "string", "embedding": "array<float>"}'
+  #   embedding_source_columns:
+  #     - name: "content"
+  #       embedding_model_endpoint_name: "databricks-gte-large-en"
+  #   # OR pre-computed vectors:
+  #   # embedding_vector_columns:
+  #   #   - name: "embedding"
+  #   #     embedding_dimension: 1024

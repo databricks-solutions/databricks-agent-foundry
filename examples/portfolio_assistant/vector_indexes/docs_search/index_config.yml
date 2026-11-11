@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=../../../../.agent-foundry/schemas/vector_search_index_config.schema.json
+#
+# Vector Search Index: docs_search
+# ==================================
+# Delta Sync index on the synthetic docs corpus.
+# Databricks manages embeddings via Foundation Model API.
+
+# The agent reaches this index through mcp_servers/docs_search/.
+
+endpoint:
+  name: "${var.vs_endpoint_name}"
+  endpoint_type: "STANDARD"
+
+index:
+  name: "${var.catalog}.${var.schema_prefix}_indexes.docs_index"
+  primary_key: "id"
+  index_type: "DELTA_SYNC"
+
+  delta_sync:
+    source_table: "${var.catalog}.${var.schema_prefix}_indexes.docs"
+    pipeline_type: "TRIGGERED"
+    columns_to_sync:
+      - "id"
+      - "content"
+      - "source"
+      - "category"
+      - "doc_uri"
+    embedding_source_columns:
+      - name: "content"
+        embedding_model_endpoint_name: "databricks-gte-large-en"

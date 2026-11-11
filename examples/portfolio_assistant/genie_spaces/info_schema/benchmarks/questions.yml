@@ -1,0 +1,17 @@
+# Benchmark Q&A pairs for validation after deployment.
+
+questions:
+  - question: "How many tables are in system.information_schema?"
+    sql: |
+      SELECT table_count
+      FROM ${var.domain}_schema_summary
+      WHERE table_catalog = 'system'
+        AND table_schema = 'information_schema'
+
+  - question: "What data types are used in system.information_schema.tables?"
+    sql: |
+      SELECT data_type, COUNT(*) AS column_count
+      FROM ${var.domain}_catalog_objects
+      WHERE table_name = 'tables'
+      GROUP BY data_type
+      ORDER BY column_count DESC

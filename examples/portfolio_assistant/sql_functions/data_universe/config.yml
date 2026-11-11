@@ -1,0 +1,27 @@
+# Data-universe functions for the portfolio-assistant agent.
+# Deployed to the agent schema (auto-computed as
+# ${var.catalog}.${var.schema_prefix}_agent).
+#
+# Two tiers, and only one of them is a tool:
+#
+#   get_data_landscape()          tier 1 -- the overview. Read by the
+#                                 runtime and injected into the system
+#                                 prompt (spec.runtime.context.data_universe),
+#                                 so it is deliberately NOT in the MCP
+#                                 allow list: offering the agent a tool
+#                                 for something already in its context
+#                                 just invites a wasted call.
+#
+#   get_table_metadata(view)      tier 2 -- the per-view detail. Exposed
+#                                 as a tool, because it is far too large
+#                                 to inject for every view and is only
+#                                 needed for the one or two a request
+#                                 actually touches.
+#
+# Both read the landscape_views / landscape_columns tables that the
+# jobs/data_universe_profile job maintains, which is what keeps them
+# trivial SELECTs rather than expensive scans on the request path.
+#
+# These are the adjustable half of the feature: changing the projection
+# below changes what the agent sees, and redeploys with
+# `agent-foundry brick sql_function deploy` -- no app redeploy.

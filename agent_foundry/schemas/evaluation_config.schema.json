@@ -1,0 +1,29 @@
+{
+  "description": "Evaluation and monitoring from ``evaluation/eval_config.yml``.",
+  "properties": {
+    "max_traces": {
+      "default": 100,
+      "title": "Max Traces",
+      "type": "integer"
+    },
+    "production_monitoring": {
+      "additionalProperties": true,
+      "default": {},
+      "title": "Production Monitoring",
+      "type": "object"
+    },
+    "scorers": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "default": {},
+      "title": "Scorers",
+      "type": "object"
+    }
+  },
+  "title": "EvaluationConfig",
+  "type": "object"
+}

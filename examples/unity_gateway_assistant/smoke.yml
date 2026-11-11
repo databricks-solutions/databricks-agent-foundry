@@ -1,0 +1,6 @@
+# Extra questions for `agent-foundry smoke` (after deploy + wait).
+# Each must get a non-empty answer from the deployed App over /invocations.
+# One per integration this example adds:
+# - the pinned Unity Gateway web search service (wording not checked).
+questions:
+  - "Search the web for the Databricks Unity Catalog documentation and give me one link."

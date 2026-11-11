@@ -1,0 +1,54 @@
+# Evaluation Configuration
+# ========================
+# Default scorer selection and production monitoring settings.
+# Instance-level overrides: instances/<name>/evaluation/eval_config.yml
+#
+# The experiment name is resolved automatically from the instance's
+# tracing_experiment variable. Override with experiment_name if needed.
+#
+# Scorer names reference:
+#   Built-in LLM judges:  Safety, RelevanceToQuery, RetrievalGroundedness,
+#                         Correctness, ToolCallCorrectness, Guidelines
+#   Custom scorers:       tool_routing_accuracy, genie_sql_correctness,
+#                         response_quality
+
+# --- Development evaluation (mlflow.genai.evaluate) ---
+scorers:
+  # Applied to all evaluation modes (no trace internals needed).
+  default:
+    - Safety
+    - RelevanceToQuery
+
+  # Applied when evaluation data includes expectations.
+  # NOTE: ToolCallCorrectness temporarily removed from default preset.
+  # MLflow 3.11.x tool-extractor fails pydantic validation on every trace
+  # (issue #48). Prefer `tool_routing_accuracy` for deterministic
+  # tool-routing signal. Opt back in by adding `- ToolCallCorrectness`
+  # to an instance-level eval_config.yml.
+  with_ground_truth:
+    - Correctness
+
+  # Applied only in --mode traces. RetrievalGroundedness is opt-in: the
+  # built-in judge errors on every row when the trace has no RETRIEVER
+  # span (issue #61). Add it on instances that actually retrieve.
+  traces_only: []
+
+  # Custom code-based scorers (always applied).
+  custom:
+    - tool_routing_accuracy
+    - genie_sql_correctness
+    - response_quality
+
+# Maximum traces to fetch in --mode traces
+max_traces: 100
+
+# Optional: default UC dataset name (overridden by CLI --dataset)
+# dataset: "${var.catalog}.${var.schema}.agent_golden_set"
+
+# --- Production monitoring (scorer.register + start) ---
+production_monitoring:
+  sample_rate: 0.5
+  scorers:
+    - Safety
+    - RelevanceToQuery
+    - response_quality

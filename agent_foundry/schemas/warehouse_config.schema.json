@@ -1,0 +1,35 @@
+{
+  "description": "Dedicated SQL warehouse sizing from ``warehouse/config.yml``.",
+  "properties": {
+    "auto_stop_mins": {
+      "default": 10,
+      "title": "Auto Stop Mins",
+      "type": "integer"
+    },
+    "max_num_clusters": {
+      "default": 1,
+      "title": "Max Num Clusters",
+      "type": "integer"
+    },
+    "min_num_clusters": {
+      "default": 1,
+      "title": "Min Num Clusters",
+      "type": "integer"
+    },
+    "size": {
+      "default": "2X-Small",
+      "title": "Size",
+      "type": "string"
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "title": "Tags",
+      "type": "object"
+    }
+  },
+  "title": "WarehouseConfig",
+  "type": "object"
+}

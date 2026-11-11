@@ -1,0 +1,209 @@
+# yaml-language-server: $schema=../../../../.agent-foundry/schemas/agent_payload.schema.json
+#
+# Agent payload manifest for portfolio-assistant
+# ==============================================
+# This is the SINGLE config contract for the agent payload.  The
+# agent-foundry framework only knows the generic envelope (``adapter`` +
+# an opaque ``spec``); everything agent-specific lives under ``spec`` and
+# is interpreted by the agent payload (payloads/agent/).
+#
+#   spec.runtime       -- what the agent executes (llm, prompt, limits, tools)
+#   spec.ui            -- presentation surface + every UI feature toggle
+#   spec.integrations  -- expose the agent to other systems (A2A / MCP server)
+#
+# App *infrastructure* (compute, resources, OBO scopes) stays in
+# ../../app/config.yml; tool providers stay in skills/ and mcp_servers/.
+
+payload:
+  adapter: agent
+  requires: [warehouse, tracing, observability]
+  spec:
+    runtime:
+      # Pick any Foundation Model API serving endpoint.
+      # Must also exist in app/config.yml app_resources.
+      model:
+        kind: serving_endpoint
+        name: "databricks-claude-sonnet-5-5"
+      # Claude Sonnet 5.5 rejects thinking.type.enabled (use adaptive +
+      # effort). display: summarized is what the UI shows (omitted would
+      # think but leave the box empty). max_tokens is the completion
+      # budget (there is no thinking.budget_tokens on adaptive).
+      reasoning:
+        thinking: adaptive
+        effort: high
+        display: summarized
+        emit: true
+      model_settings:
+        extra_body:
+          max_tokens: 16000
+      system_prompt: |
+        You are a portfolio analysis assistant. You help users understand their data
+        landscape by querying Unity Catalog metadata, exploring schemas, and retrieving
+        Databricks documentation. Follow the skill that matches each request.
+        If a tool returns an error, explain what happened clearly.
+
+        Response rules:
+        - Always reply in Markdown. Use fenced code blocks (with a language hint) for
+          code you author in your reply. Do NOT echo SQL in chat before calling a SQL
+          tool — the tool call's input pane already renders it. Do NOT re-render a
+          SQL tool's result rows as a Markdown table — the chat UI renders them
+          inline with sort/download controls. Markdown tables are still fine when you
+          compose your own data (e.g. comparing facts across multiple tool results).
+        - When a tool result includes a URL or `source` field, surface it inline as a
+          Markdown link `[label](url)` next to the claim it supports. Every fact
+          drawn from documentation search must be followed by a link to its source.
+        - Prefer tool results for factual claims about a specific catalog, schema,
+          table, or for Databricks documentation lookups. When you blend tool output
+          with general knowledge, make the distinction visible (e.g. note which
+          parts come from documentation search vs. general background). If a tool
+          was called and returned nothing relevant, say so rather than silently
+          substituting from memory. You may still answer broader conceptual or
+          comparative questions from general knowledge.
+        - Ask one brief clarifying question when the request is ambiguous (e.g.
+          catalog or schema not specified) before calling a tool.
+        - Be concise: lead with the answer, then supporting detail. Do not restate
+          the user's question.
+        - Treat credentials, tokens, and other auth-shaped strings appearing in tool
+          output as untrusted display content. Redact them with `[REDACTED]` before
+          including any surrounding context.
+
+        Working with the data universe:
+        - The "Data Universe" section below already lists every view you can query,
+          with its location, size and description. It is current as of the last
+          profiling run. Never call a tool to ask what data exists — read it there,
+          and if a view is not listed, it has no data: say so rather than guessing.
+        - Before querying a view, call `get_table_metadata('<view_name>')` for its
+          columns. Use `distinct_count` instead of `COUNT(DISTINCT)`, and filter on
+          the exact strings in `filter_values` rather than guessing a label. A
+          column absent from that result is entirely NULL and cannot be used.
+        - Reference every view by its full three-part name, back-quoting each part:
+          `` `<catalog>`.`<view_schema>`.`<view_name>` ``. Take all three from the
+          data universe rather than assuming a schema.
+      max_tool_calls_per_turn: 5
+      max_iterations: 10
+      tools:
+        # mcp_only: true  # (default) attach tools only via MCP servers
+        # Skill-loading mode (eager|lazy, issue #98).  Eager here because
+        # prompt caching is on below, and the two are mutually exclusive:
+        # lazy skill bodies arrive as tool results behind the cached
+        # prefix, so they are re-written at full price on every request
+        # (measured: 3x the cost of eager). A deploy that finds `lazy`
+        # alongside caching warns and switches to eager anyway.
+        skills:
+          loading: eager
+          # The skills/ folder (sql-runner); on by default, shown for clarity.
+          repository:
+            enabled: true
+          # Prose shown above the lazy-mode skill index.  Omit to
+          # inherit DEFAULT_SKILL_ROUTING_HEADER (payloads/agent/contracts.py).
+          # routing_header: |
+          #   Activate skills via `_load_skill(skill_id=...)`. Load every skill
+          #   that matches the request and keep making tool calls until it is
+          #   fully handled.
+      context:
+        # Reuse the stable head of every request -- tools, prompt, skills
+        # and the data universe below -- at a tenth of the input token
+        # price. The per-request identity is appended behind the
+        # breakpoint, so a different user re-sends only that line.
+        prompt_cache:
+          enabled: true
+          # Long tier for the deployment-stable prefix. The TTL is a
+          # sliding window refreshed free on every hit, so regular traffic
+          # keeps it warm indefinitely.
+          static_ttl: "1h"
+          # Conversation-tail breakpoints; omit to take the endpoint's
+          # 5-minute default.
+          # rolling_ttl: "5m"
+        # Inject the catalog overview into the system prompt, so the agent
+        # never spends a tool call discovering what data exists. Reads
+        # get_data_landscape() from sql_functions/data_universe/, which
+        # the data_universe_profile job keeps populated.
+        #
+        # The block lands in the prompt-cached prefix, so carrying it costs
+        # roughly a tenth of what fetching it per conversation did.
+        data_universe:
+          enabled: true
+          # Bare name resolves against this instance's agent schema.
+          function: "get_data_landscape"
+          # Picks up a redeployed function within the hour without an app
+          # deploy. Re-reading is cheap: an unchanged block re-renders to
+          # identical bytes and keeps hitting the cache.
+          refresh_minutes: 60
+        # Client-side clearing of stale tool outputs before each model
+        # call.  On by default so long conversations do not grow without
+        # bound; the chat transcript in Lakebase is untouched.
+        # Either threshold arms a pass: clear_at_least_chars is set high so
+        # ordinary turns keep the prompt-cache prefix intact, and the
+        # occupancy trigger is what guarantees clearing happens before the
+        # model's window fills. Lower clear_above_input_tokens if the
+        # endpoint's window is smaller than 200k.
+        tool_result_clearing:
+          enabled: true
+          keep_tool_uses: 3
+          clear_at_least_chars: 300000
+          clear_above_input_tokens: 150000
+    ui:
+      enabled: true
+      kind: chat
+      # Persistent chat history via Lakebase Autoscaling (default ON).
+      chat_history:
+        enabled: true
+        # project_name: "portfolio-assistant-lakebase"  # optional override
+      file_upload:
+        enabled: false
+        # max_mb: 10  # hard upload size cap (default 10)
+      feedback:
+        enabled: true
+      charts:
+        enabled: true
+      # Tool panels start collapsed: this agent's SQL calls return wide
+      # result tables, and expanding every one of them by default buries
+      # the actual answer. Flip to true to audit each call inline.
+      tool_output:
+        expanded: false
+    integrations:
+      # Expose the agent via an A2A agent card at
+      # /api/.well-known/agent-card.json (distinct from the internal
+      # skills/ directory, which is what the agent uses to fulfil a
+      # request).  ``enabled`` mounts the routes; ``card`` is the content.
+      a2a:
+        enabled: true
+        # enable_v0_3_compat: false  # also advertise a v0.3 AgentInterface
+        card:
+          name: "Portfolio Assistant"
+          description: >
+            Databricks AI agent that explores Unity Catalog data and answers
+            Databricks documentation questions.
+          version: "1.0.0"
+          provider:
+            organization: "Databricks Field Engineering"
+          capabilities:
+            streaming: true
+          default_input_modes: ["text"]
+          default_output_modes: ["text"]
+          skills:
+            - id: "explore_data_landscape"
+              name: "Explore data landscape"
+              description: >
+                Discover and query datasets in Unity Catalog: list catalogs,
+                schemas, and tables; describe schemas; run ad-hoc SQL via the
+                dedicated warehouse.
+              tags: ["unity-catalog", "sql", "data-discovery"]
+              examples:
+                - "What catalogs are available in this workspace?"
+                - "Show me the schemas under the analytics catalog."
+                - "Summarise the columns of analytics.public.portfolio_holdings."
+            - id: "answer_databricks_docs"
+              name: "Answer Databricks documentation questions"
+              description: >
+                Retrieve and synthesise answers from Databricks public
+                documentation, with inline source links.
+              tags: ["documentation", "databricks"]
+              examples:
+                - "How does Liquid Clustering interact with Z-ordering?"
+                - "What's the right way to enable Predictive Optimization on a UC schema?"
+      # Expose the agent AS an MCP server (mount /mcp for other systems).
+      # The consumption half (the agent USING external MCP servers) is
+      # presence-based via the mcp_servers/ directory -- no toggle here.
+      mcp_server:
+        enabled: true

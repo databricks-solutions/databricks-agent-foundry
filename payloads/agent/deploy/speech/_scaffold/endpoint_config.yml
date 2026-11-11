@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=../../../../.agent-foundry/schemas/model_serving_endpoint_config.schema.json
+#
+# Speech-to-text endpoint for the chat UI mic button (Whisper large-v3-turbo
+# on one T4). Enable it in payload.yml:
+#
+#   ui:
+#     speech_input:
+#       enabled: true
+#       endpoint: ${var.serving_endpoint_name__speech}
+#
+# The first deploy builds the model in a serverless job (about 10 minutes)
+# and waits for the GPU endpoint (20-40 minutes). See
+# bricks/model_serving/README.md for every field.
+
+endpoint_name: ${var.app_name}-speech
+
+model:
+  # The agent schema, next to the payload's other Unity Catalog objects.
+  name: ${var.catalog}.${var.schema_prefix}_agent.speech_whisper_turbo
+  workload_type: GPU_SMALL
+  # One worker handles one recording at a time; Small already allows 4
+  # concurrent requests.
+  workload_size: Small
+  # true keeps idle cost at zero, but the first recording after idling waits
+  # several minutes for a GPU cold start. Set false for production.
+  scale_to_zero: true
+
+build:
+  script: ./build_whisper.py
+  files:
+    - ./whisper_model.py
+  dependencies:
+    - faster-whisper==1.2.1
+    # faster-whisper 1.2.1 passes av.open(metadata_errors=...), removed in PyAV 19.
+    - av>=11,<19
+    - mlflow==3.17.1
+  timeout_minutes: 60

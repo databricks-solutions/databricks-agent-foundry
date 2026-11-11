@@ -1,0 +1,67 @@
+{
+  "$defs": {
+    "Warehouse": {
+      "additionalProperties": false,
+      "description": "Per-instance SQL warehouse binding.\n\nIntroduced in ``schema_version = 2``: warehouse ownership moved\nfrom the repo-root :class:`Target` to the per-instance\n:class:`FoundryInstanceConfig`.  This matches the operational\nreality that each agent instance either needs its *own* dedicated\nwarehouse (for cost attribution and lifecycle isolation) or\nexplicitly opts to share an existing one with another workload.\n\nTwo modes:\n\n* ``mode = \"dedicated\"`` (default) -- the warehouse brick\n  provisions a new SQL warehouse for this instance.  Sizing,\n  auto-stop, and tags come from\n  ``instances/<name>/warehouse/config.yml``.  Authoring\n  ``warehouse_id`` here is rejected (typo guard: the field is\n  meaningless in dedicated mode).\n* ``mode = \"reuse\"`` -- the instance binds to an existing\n  warehouse.  ``warehouse_id`` is required and the warehouse\n  brick refuses to run (a stale ``warehouse/config.yml`` is\n  rejected by the loader as a strict-overlap error to keep the\n  authoring surface unambiguous).",
+      "properties": {
+        "mode": {
+          "default": "dedicated",
+          "enum": [
+            "dedicated",
+            "reuse"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "warehouse_id": {
+          "default": "",
+          "title": "Warehouse Id",
+          "type": "string"
+        }
+      },
+      "title": "Warehouse",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Typed shape of ``instances/<name>/foundry.toml``.\n\nExample::\n\n    name             = \"portfolio-assistant\"\n    description      = \"Agent with Genie + Vector Search\"\n    schema_prefix    = \"portfolio_assistant\"\n    vs_endpoint_name = \"vs_docs_demo\"\n\nOwns instance *identity* + the warehouse binding.  Runtime config\nand feature toggles (chat history, file upload, ...) are NOT authored\nhere -- they live in the agent payload ``spec``\n(``payloads/agent/payload.yml``), the single per-payload config\ncontract.\n\nField semantics match the user-authored subset of\n:class:`agent_foundry.config.InstanceConfig`.  Computed fields\n(``agent_schema``, ``tracing_destination``, ``solution_root``, ...)\nare not on this model -- they are derived at composition time by\nthe loader (F-PR2) and exposed via the runtime\n:class:`~agent_foundry.config.InstanceConfig`.",
+  "properties": {
+    "app_name": {
+      "default": "",
+      "title": "App Name",
+      "type": "string"
+    },
+    "chat_ui_app_name": {
+      "default": "",
+      "title": "Chat Ui App Name",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "schema_prefix": {
+      "title": "Schema Prefix",
+      "type": "string"
+    },
+    "vs_endpoint_name": {
+      "default": "",
+      "title": "Vs Endpoint Name",
+      "type": "string"
+    },
+    "warehouse": {
+      "$ref": "#/$defs/Warehouse"
+    }
+  },
+  "required": [
+    "name",
+    "schema_prefix"
+  ],
+  "title": "FoundryInstanceConfig",
+  "type": "object"
+}

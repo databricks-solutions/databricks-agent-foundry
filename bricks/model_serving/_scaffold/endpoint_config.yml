@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=../../../../.agent-foundry/schemas/model_serving_endpoint_config.schema.json
+#
+# Serverless Model Serving endpoint — full configuration reference
+# =================================================================
+# One endpoint serving one Unity Catalog model version. The active example
+# serves an already-registered classic ML model on CPU and scales to zero.
+# Every ServingEndpointConfig field appears below (active or commented).
+
+# Workspace-unique name: letters, digits, '-' and '_' (max 63 characters).
+endpoint_name: ${var.app_name}-example-model
+
+model:
+  # Three-level UC model name.
+  name: ${var.catalog}.${var.schema}.example_model
+  # Pick the served version with at most one of these; neither serves the
+  # latest registered version. Not allowed together with `build`.
+  # version: "3"
+  # alias: champion
+  # CPU, CPU_MEDIUM, CPU_LARGE, GPU_SMALL (1x T4), GPU_MEDIUM, GPU_LARGE,
+  # MULTIGPU_MEDIUM. GPU availability differs per cloud region.
+  workload_type: CPU
+  # Small = 4, Medium = 8-16, Large = 16-64 concurrent requests.
+  workload_size: Small
+  # true: no cost while idle, but the first request after idling waits for a
+  # cold start (minutes on GPU). Set false for always-on production traffic.
+  scale_to_zero: true
+  # Environment variables of the serving container; secrets as
+  # "{{secrets/<scope>/<key>}}".
+  # environment_vars:
+  #   LOG_LEVEL: INFO
+
+# Optional: build the model instead of serving an existing one. The script
+# runs as a serverless job with `--model-name <model.name>` and
+# `--experiment <workspace path>` and must register one new version. It
+# reruns only when the script, a listed file or a dependency changes. The
+# brick owns a built model: destroy deletes it with all its versions.
+# build:
+#   script: ./build_model.py
+#   files:
+#     - ./model_code.py
+#   dependencies:
+#     - mlflow==3.17.1
+#     - scikit-learn==1.7.2
+#   environment_version: "3"
+#   timeout_minutes: 60
+
+# Extra endpoint tags (managed-by tags are added automatically).
+# tags:
+#   team: data-science

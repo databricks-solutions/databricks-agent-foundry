@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=../../../.agent-foundry/schemas/agent_app_config.schema.json
+#
+# Agent App overrides for unity-gateway-assistant
+# ===============================================
+# Merged on top of bricks/app/_scaffold/config.yml.  Deploy swaps the brick
+# default ``llm-endpoint`` resource for an EXECUTE grant on the
+# ``model_service`` named in payloads/agent/payload.yml.  The
+# ``ai-gateway`` OBO scope is added by deploy for Unity Gateway MCP and
+# skills in payloads/agent/payload.yml.
+
+payloads:
+  - "agent"
+
+compute_size: "medium"

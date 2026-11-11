@@ -1,0 +1,603 @@
+{
+  "$defs": {
+    "ApiSpec": {
+      "additionalProperties": false,
+      "description": "One upstream REST API -> its own MCP mount + UC connection / service.",
+      "properties": {
+        "code_tools": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CodeToolSpec"
+          },
+          "title": "Code Tools",
+          "type": "array"
+        },
+        "mcp_service": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpServiceSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "rest": {
+          "$ref": "#/$defs/RestConfig"
+        },
+        "tools": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ToolSpec"
+          },
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "rest"
+      ],
+      "title": "ApiSpec",
+      "type": "object"
+    },
+    "CodeToolSpec": {
+      "additionalProperties": false,
+      "description": "A Tier-3 code tool -- an instance-side Python module implementing the\npayload's tool contract, for shapes needing computation.\n\nThe ``module`` path is instance-relative and synced into the app; it is\nconfined to the instance tree (no absolute paths, no ``..`` traversal) so\na code tool can never point outside the deployed instance.",
+      "properties": {
+        "module": {
+          "title": "Module",
+          "type": "string"
+        }
+      },
+      "required": [
+        "module"
+      ],
+      "title": "CodeToolSpec",
+      "type": "object"
+    },
+    "McpGrants": {
+      "additionalProperties": false,
+      "description": "Unity Catalog grants applied to the MCP Service securable.",
+      "properties": {
+        "execute": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Execute",
+          "type": "array"
+        }
+      },
+      "title": "McpGrants",
+      "type": "object"
+    },
+    "McpServiceSpec": {
+      "additionalProperties": false,
+      "description": "Optional path-C governance layer for one API (Beta; opt-in).\n\nPresence of this block opts the API's ``is_mcp`` connection into a UC **MCP\nService** securable (``catalog.schema.<api>``) built *on top of* it.  Agent\nconsumption stays on the reliable ``type: external`` connection; the service\nprovisions the governance surface (tool selection, service policies, rate\nlimits, EXECUTE grants) that activates when consumption later moves to the AI\nGateway URL.  ``catalog`` / ``schema`` default to the instance's target\ncatalog + ``<schema_prefix>_rest_mcp`` schema when omitted.",
+      "properties": {
+        "catalog": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "grants": {
+          "$ref": "#/$defs/McpGrants",
+          "default": {
+            "execute": []
+          }
+        },
+        "include_tool_selectors": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Include Tool Selectors",
+          "type": "array"
+        },
+        "rate_limits": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RateLimitSpec"
+          },
+          "title": "Rate Limits",
+          "type": "array"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema"
+        },
+        "service_policies": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ServicePolicySpec"
+          },
+          "title": "Service Policies",
+          "type": "array"
+        }
+      },
+      "title": "McpServiceSpec",
+      "type": "object"
+    },
+    "NoAuth": {
+      "additionalProperties": false,
+      "description": "``auth: { mode: none }`` -- unauthenticated egress (public APIs).",
+      "properties": {
+        "mode": {
+          "const": "none",
+          "default": "none",
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "title": "NoAuth",
+      "type": "object"
+    },
+    "OboAuth": {
+      "additionalProperties": false,
+      "description": "``auth: { mode: obo }`` -- forward the caller's identity (advanced).\n\nOn-Behalf-Of forwards the caller's ``x-forwarded-access-token``.  It only\nreaches **Databricks-ecosystem** resources (no dynamic client registration,\nU2M won't auto-prompt for arbitrary third-party APIs), so it is gated as\nadvanced -- default to ``static`` / ``none`` for non-Databricks targets.",
+      "properties": {
+        "mode": {
+          "const": "obo",
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "OboAuth",
+      "type": "object"
+    },
+    "RateLimitSpec": {
+      "additionalProperties": false,
+      "description": "One AI-Gateway rate limit on the MCP Service (per principal, per minute).\n\nSpike-confirmed: the MCP-services request body uses per-principal keys and a\n``minute`` renewal window only.  ``calls`` is the request budget per window;\nit maps to the wire field the API actually reads for MCP (``tokens``) -- the\nserving-endpoint ``calls`` field is silently ignored there.",
+      "properties": {
+        "calls": {
+          "exclusiveMinimum": 0,
+          "title": "Calls",
+          "type": "integer"
+        },
+        "key": {
+          "enum": [
+            "user",
+            "user_group",
+            "service_principal"
+          ],
+          "title": "Key",
+          "type": "string"
+        },
+        "principal": {
+          "minLength": 1,
+          "title": "Principal",
+          "type": "string"
+        },
+        "renewal_period": {
+          "const": "minute",
+          "default": "minute",
+          "title": "Renewal Period",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "principal",
+        "calls"
+      ],
+      "title": "RateLimitSpec",
+      "type": "object"
+    },
+    "RestConfig": {
+      "additionalProperties": false,
+      "description": "``api.rest`` -- how the app reaches one upstream REST API (hop 2).",
+      "properties": {
+        "allowed_hosts": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Allowed Hosts",
+          "type": "array"
+        },
+        "auth": {
+          "default": {
+            "mode": "none"
+          },
+          "discriminator": {
+            "mapping": {
+              "none": "#/$defs/NoAuth",
+              "obo": "#/$defs/OboAuth",
+              "static": "#/$defs/StaticAuth"
+            },
+            "propertyName": "mode"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NoAuth"
+            },
+            {
+              "$ref": "#/$defs/StaticAuth"
+            },
+            {
+              "$ref": "#/$defs/OboAuth"
+            }
+          ],
+          "title": "Auth"
+        },
+        "base_url": {
+          "title": "Base Url",
+          "type": "string"
+        },
+        "defaults": {
+          "$ref": "#/$defs/RestDefaults",
+          "default": {
+            "max_response_bytes": 100000,
+            "timeout_s": 30
+          }
+        }
+      },
+      "required": [
+        "base_url",
+        "allowed_hosts"
+      ],
+      "title": "RestConfig",
+      "type": "object"
+    },
+    "RestDefaults": {
+      "additionalProperties": false,
+      "description": "``rest.defaults`` -- per-API request defaults (overridable per tool later).",
+      "properties": {
+        "max_response_bytes": {
+          "default": 100000,
+          "exclusiveMinimum": 0,
+          "title": "Max Response Bytes",
+          "type": "integer"
+        },
+        "timeout_s": {
+          "default": 30,
+          "exclusiveMinimum": 0,
+          "title": "Timeout S",
+          "type": "integer"
+        }
+      },
+      "title": "RestDefaults",
+      "type": "object"
+    },
+    "RestMcpPayloadConfig": {
+      "additionalProperties": false,
+      "description": "The ``payload:`` block when ``adapter: rest_mcp`` (typed spec).",
+      "properties": {
+        "adapter": {
+          "title": "Adapter",
+          "type": "string"
+        },
+        "requires": {
+          "items": {
+            "enum": [
+              "warehouse",
+              "tracing",
+              "observability"
+            ],
+            "type": "string"
+          },
+          "title": "Requires",
+          "type": "array"
+        },
+        "spec": {
+          "$ref": "#/$defs/RestMcpPayloadSpec"
+        }
+      },
+      "required": [
+        "adapter",
+        "spec"
+      ],
+      "title": "RestMcpPayloadConfig",
+      "type": "object"
+    },
+    "RestMcpPayloadSpec": {
+      "additionalProperties": false,
+      "description": "``payload.spec`` for the ``rest_mcp`` adapter (the full authoring body).",
+      "properties": {
+        "apis": {
+          "items": {
+            "$ref": "#/$defs/ApiSpec"
+          },
+          "minItems": 1,
+          "title": "Apis",
+          "type": "array"
+        }
+      },
+      "required": [
+        "apis"
+      ],
+      "title": "RestMcpPayloadSpec",
+      "type": "object"
+    },
+    "ServicePolicySpec": {
+      "additionalProperties": false,
+      "description": "One governance policy applied to the MCP Service (flat entry).\n\n``builtin`` handlers are platform-defined policy names (validated by the\nplatform); ``custom`` handlers are UC functions named\n``catalog.schema.function`` (the deploy module wraps them as the API's\n``functions/{fqn}`` handler form).",
+      "properties": {
+        "handler": {
+          "minLength": 1,
+          "title": "Handler",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "options": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "title": "Options",
+          "type": "object"
+        },
+        "policy_type": {
+          "enum": [
+            "builtin",
+            "custom"
+          ],
+          "title": "Policy Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "policy_type",
+        "handler"
+      ],
+      "title": "ServicePolicySpec",
+      "type": "object"
+    },
+    "StaticAuth": {
+      "additionalProperties": false,
+      "description": "``auth: { mode: static }`` -- a bearer token from a Databricks secret.\n\nThe token is referenced by scope/key only; it is never inlined in the\nconfig and never logged.",
+      "properties": {
+        "header": {
+          "default": "Authorization",
+          "title": "Header",
+          "type": "string"
+        },
+        "mode": {
+          "const": "static",
+          "title": "Mode",
+          "type": "string"
+        },
+        "secret_key": {
+          "title": "Secret Key",
+          "type": "string"
+        },
+        "secret_scope": {
+          "title": "Secret Scope",
+          "type": "string"
+        },
+        "value_prefix": {
+          "default": "Bearer ",
+          "title": "Value Prefix",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "secret_scope",
+        "secret_key"
+      ],
+      "title": "StaticAuth",
+      "type": "object"
+    },
+    "ToolArg": {
+      "additionalProperties": false,
+      "description": "One declared tool input -- feeds the MCP ``inputSchema`` and the request.\n\n``in`` fixes where the value lands: ``path`` (a ``{name}`` path segment),\n``query`` (a query-string param), or ``body`` (a JSON body field, or a\n``{{name}}`` substitution when a ``body_template`` is present).",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "in": {
+          "enum": [
+            "path",
+            "query",
+            "body"
+          ],
+          "title": "In",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "type": {
+          "default": "string",
+          "enum": [
+            "string",
+            "integer",
+            "number",
+            "boolean",
+            "array",
+            "object"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "in"
+      ],
+      "title": "ToolArg",
+      "type": "object"
+    },
+    "ToolRequest": {
+      "additionalProperties": false,
+      "description": "``tool.request`` -- the upstream call the tool maps to.",
+      "properties": {
+        "args": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ToolArg"
+          },
+          "title": "Args",
+          "type": "array"
+        },
+        "body_template": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Body Template"
+        },
+        "input_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Schema"
+        },
+        "method": {
+          "enum": [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "method",
+        "path"
+      ],
+      "title": "ToolRequest",
+      "type": "object"
+    },
+    "ToolResponse": {
+      "additionalProperties": false,
+      "description": "``tool.response`` -- how the upstream response is projected for the LLM.",
+      "properties": {
+        "project": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project"
+        }
+      },
+      "title": "ToolResponse",
+      "type": "object"
+    },
+    "ToolSpec": {
+      "additionalProperties": false,
+      "description": "One declarative tool -> one MCP method on this API's server.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "mutating": {
+          "default": false,
+          "title": "Mutating",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/ToolRequest"
+        },
+        "response": {
+          "$ref": "#/$defs/ToolResponse",
+          "default": {
+            "project": null
+          }
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "request"
+      ],
+      "title": "ToolSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Top-level shape of the ``rest_mcp`` ``payload.yml`` (drives the schema).",
+  "properties": {
+    "payload": {
+      "$ref": "#/$defs/RestMcpPayloadConfig"
+    }
+  },
+  "required": [
+    "payload"
+  ],
+  "title": "RestMcpPayloadFile",
+  "type": "object"
+}

@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=../../../.agent-foundry/schemas/warehouse_config.schema.json
+#
+# Dedicated SQL warehouse for unity-gateway-assistant (the agent payload requires
+# one for tracing and observability).
+
+# SAFE TO CHANGE: warehouse size (affects cost and performance).
+size: "X-Small"
+
+# SAFE TO CHANGE: auto-stop idle timeout in minutes.
+auto_stop_mins: 10
+
+min_num_clusters: 1
+max_num_clusters: 1

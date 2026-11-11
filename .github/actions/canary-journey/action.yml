@@ -1,0 +1,153 @@
+name: Canary journey
+description: >-
+  Consumer setup shared by every canary level, at the candidate SHA:
+  toolchain plus (unless install-checkout is false) the framework checkout's
+  deps for tests/live checks,
+  git access, run identity, ``uvx agent-foundry init``, the scenario's
+  scaffolds, then (when destroy-first is true) destroy of the previous
+  canary under the same stable names. Run after actions/checkout at the
+  candidate SHA. Deploy and checks stay in the calling job. Workspace auth and
+  AGENT_FOUNDRY_TEST_CATALOG come from the job environment.
+
+inputs:
+  scenario:
+    description: Scenario id from agent_foundry/testing/scenarios.toml
+    required: true
+  framework-spec:
+    description: uv requirement for the candidate framework (agent-foundry @ git+...@<sha>)
+    required: true
+  framework-sha:
+    description: Candidate commit, pinned into the generated repo
+    required: true
+  python-version:
+    description: Python for uv / uvx
+    required: true
+  run-id:
+    description: Run token for the stable canary names
+    required: true
+  github-token:
+    description: Token with read access to the framework repo
+    required: true
+  install-checkout:
+    description: '"true" installs the framework checkout into .venv, for pytest runs of its tests/live checks'
+    required: false
+    default: "true"
+  destroy-first:
+    description: '"true" destroys the previous canary before deploy; otherwise deploy updates it in place'
+    required: false
+    default: "false"
+
+outputs:
+  project:
+    description: Generated project (and instance) name
+    value: ${{ steps.prep.outputs.project }}
+  project-dir:
+    description: Absolute path of the generated repo
+    value: ${{ steps.prep.outputs.project-dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Require workspace binding
+      shell: bash
+      run: |
+        if [ -z "${DATABRICKS_HOST:-}" ] || [ -z "${DATABRICKS_CLIENT_ID:-}" ]; then
+          echo "DATABRICKS_HOST / DATABRICKS_CLIENT_ID are empty on environment framework-acceptance."
+          echo "Set both (service principal UUID for the client id); auth is GitHub OIDC federation."
+          exit 1
+        fi
+
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: ${{ inputs.python-version }}
+    - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      with:
+        # Off by default on self-hosted runners. Caches downloads only;
+        # installs still verify the lock's hashes.
+        enable-cache: true
+        cache-dependency-glob: uv.lock
+    - uses: databricks/setup-cli@9230f12203ef173d0b901846f62a55ce997efef7 # v1.19.0
+
+
+    - name: Install from lock (public PyPI)
+      if: inputs.install-checkout == 'true'
+      run: uv sync --frozen --extra runtime --extra dev
+
+    - name: Git access to the framework repo
+      # uvx and the generated repo's ``uv lock`` both fetch the pinned
+      # git dependency. Header auth keeps the token out of URLs and uv.lock.
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        basic=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+        echo "::add-mask::$basic"
+        git config --global http.https://github.com/.extraheader "AUTHORIZATION: basic $basic"
+
+    - name: Prepare run
+      id: prep
+      shell: bash
+      env:
+        SCENARIO: ${{ inputs.scenario }}
+        RUN_ID: ${{ inputs.run-id }}
+        FRAMEWORK_SPEC: ${{ inputs.framework-spec }}
+        PY: ${{ inputs.python-version }}
+      run: |
+        uv run --no-project --python "$PY" --with "$FRAMEWORK_SPEC" \
+          python -m agent_foundry.testing.harness prepare \
+          --scenario "$SCENARIO" --run-id "$RUN_ID" > /tmp/prep.json
+        project=$(python -c 'import json; print(json.load(open("/tmp/prep.json"))["project_name"])')
+        python -c 'import json; print(json.load(open("/tmp/prep.json"))["stdin"], end="")' > /tmp/init.stdin
+        python -c 'import json; print("\n".join(json.load(open("/tmp/prep.json"))["scaffolds"]))' > /tmp/scaffolds.txt
+        echo "project=$project" >> "$GITHUB_OUTPUT"
+        echo "project-dir=$RUNNER_TEMP/generated/$project" >> "$GITHUB_OUTPUT"
+
+    - name: Init (uvx at candidate SHA)
+      shell: bash
+      env:
+        PROJECT: ${{ steps.prep.outputs.project }}
+        FRAMEWORK_SPEC: ${{ inputs.framework-spec }}
+        FRAMEWORK_SHA: ${{ inputs.framework-sha }}
+        PY: ${{ inputs.python-version }}
+      run: |
+        mkdir -p "$RUNNER_TEMP/generated"
+        uvx --python "$PY" --from "$FRAMEWORK_SPEC" agent-foundry init \
+          --outdir "$RUNNER_TEMP/generated" \
+          --name "$PROJECT" \
+          --framework-ref "$FRAMEWORK_SHA" \
+          < /tmp/init.stdin
+
+    - name: Scaffold
+      shell: bash
+      working-directory: ${{ steps.prep.outputs.project-dir }}
+      env:
+        PROJECT: ${{ steps.prep.outputs.project }}
+      run: |
+        while read -r verb; do
+          [ -n "$verb" ] || continue
+          uv run agent-foundry scaffold "$verb" --instance "$PROJECT"
+        done < /tmp/scaffolds.txt
+
+    - name: Apply scenario fixture
+      # No-op for scenarios without ``fixture = true``.
+      shell: bash
+      env:
+        SCENARIO: ${{ inputs.scenario }}
+        FRAMEWORK_SPEC: ${{ inputs.framework-spec }}
+        PY: ${{ inputs.python-version }}
+        INSTANCE_DIR: ${{ steps.prep.outputs.project-dir }}/instances/${{ steps.prep.outputs.project }}
+      run: |
+        uv run --no-project --python "$PY" --with "$FRAMEWORK_SPEC" \
+          python -m agent_foundry.testing.harness apply-fixture \
+          --scenario "$SCENARIO" --instance-dir "$INSTANCE_DIR"
+
+    - name: Rebuild previous canary
+      # Nothing to destroy on the first run under these names.
+      if: inputs.destroy-first == 'true'
+      shell: bash
+      working-directory: ${{ steps.prep.outputs.project-dir }}
+      env:
+        PROJECT: ${{ steps.prep.outputs.project }}
+      run: |
+        uv run agent-foundry destroy --instance "$PROJECT" --target dev --force \
+          || echo "::notice::no previous canary destroyed for $PROJECT"

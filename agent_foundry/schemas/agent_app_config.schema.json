@@ -1,0 +1,86 @@
+{
+  "additionalProperties": false,
+  "description": "The YAML shape of ``app/config.yml``.\n\n``compute_size`` maps to the Databricks Apps ``ComputeSize`` enum\n(``MEDIUM`` / ``LARGE``); the deploy script uppercases it before\npassing it to the SDK.\n\n``user_authorization`` is a closed enum of OBO scopes\n(:data:`UserApiScope`) so a misspelled scope fails the deploy\ninstead of being silently sent to (and rejected by) the API.",
+  "properties": {
+    "app_resources": {
+      "default": [],
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "App Resources",
+      "type": "array"
+    },
+    "compute_size": {
+      "default": "medium",
+      "enum": [
+        "medium",
+        "large"
+      ],
+      "title": "Compute Size",
+      "type": "string"
+    },
+    "payloads": {
+      "default": [
+        "agent"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Payloads",
+      "type": "array"
+    },
+    "sp_grants": {
+      "default": [],
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Sp Grants",
+      "type": "array"
+    },
+    "telemetry_destination": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Telemetry Destination"
+    },
+    "user_authorization": {
+      "default": [],
+      "items": {
+        "enum": [
+          "sql",
+          "dashboards.genie",
+          "serving.serving-endpoints",
+          "vectorsearch.vector-search-indexes",
+          "catalog.catalogs:read",
+          "catalog.schemas:read",
+          "catalog.tables:read",
+          "mcp.functions",
+          "mcp.vectorsearch",
+          "mcp.genie",
+          "mcp.external",
+          "genie",
+          "model-serving",
+          "postgres",
+          "catalog.connections",
+          "files",
+          "ai-gateway",
+          "vector-search",
+          "workspace.workspace"
+        ],
+        "type": "string"
+      },
+      "title": "User Authorization",
+      "type": "array"
+    }
+  },
+  "title": "AgentAppConfig",
+  "type": "object"
+}

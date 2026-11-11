@@ -1,0 +1,7 @@
+# Variant manifest for ``agent-foundry init``.
+#
+# Discovered automatically by ``agent_foundry.init.examples_registry``; the
+# wizard renders ``display_name`` + ``description`` in its starter menu.
+
+display_name = "Unity Gateway Assistant"
+description = "Agent on a Unity Gateway model service with a pinned Unity Gateway MCP service (web search) and a git-managed skill"

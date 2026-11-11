@@ -1,0 +1,24 @@
+questions:
+  - input: "What is Unity Catalog?"
+    expected_tools:
+      - docs_search
+    expected_output_contains:
+      - "governance"
+
+  - input: "How does Delta Lake handle ACID transactions?"
+    expected_tools:
+      - docs_search
+    expected_output_contains:
+      - "ACID"
+
+  - input: "What are best practices for data ingestion in Databricks?"
+    expected_tools:
+      - docs_search
+    expected_output_contains:
+      - "ingestion"
+
+  - input: "Compare the number of tables in system.information_schema with what the documentation says about system tables"
+    expected_tools:
+      - docs_search
+    expected_output_contains:
+      - "tables"

@@ -1,0 +1,168 @@
+name: CI
+
+# Every PR: static checks, offline tests, packaged example smoke.
+# Live checks run against CLI deployments in acceptance.yml
+# ("Framework acceptance"). See tests/README.md "What runs when".
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Fork starter: GitHub-hosted ubuntu-latest and public PyPI.
+# Jobs no-op on databricks-solutions/databricks-agent-foundry (Actions stay disabled there).
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  lint:
+    name: Static checks (ruff)
+    if: github.repository != 'databricks-solutions/databricks-agent-foundry'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+
+      - name: Install from lock (public PyPI)
+        run: uv sync --frozen --extra dev
+
+      - name: ruff format --check
+        run: uv run --no-sync ruff format --check .
+
+      - name: ruff check
+        run: uv run --no-sync ruff check .
+
+  unit-tests:
+    name: Offline tests
+    timeout-minutes: 15
+    if: github.repository != 'databricks-solutions/databricks-agent-foundry'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+
+      - name: Install from lock (public PyPI)
+        run: uv sync --frozen --extra runtime --extra dev
+
+      # Hermetic unit job: in-process + cheap --offline CLI. Packaging
+      # smokes (``component``) and live workspace (``live``) are
+      # other jobs. Telemetry / default
+      # WorkspaceClient are also gated by the pytest plugin; set both
+      # here so a hang cannot survive a plugin miss or a CLI subprocess
+      # that does not inherit the in-process SDK patch.
+      - name: Run unit tests
+        env:
+          AGENT_FOUNDRY_TELEMETRY_DISABLED: "true"
+          AGENT_FOUNDRY_SKIP_DEFAULT_WORKSPACE_CLIENT: "true"
+        run: uv run --no-sync coverage run -m pytest -m "not live and not component" -v --tb=short
+
+      # Report-only (#722): no threshold, so coverage never fails the job.
+      - name: Coverage summary
+        if: always()
+        run: |
+          [ -f .coverage ] || exit 0
+          uv run --no-sync coverage xml
+          uv run --no-sync coverage report --format=markdown --skip-covered >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: always() && hashFiles('coverage.xml') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 14
+
+      - name: Validate prerequisites (offline)
+        run: uv run --no-sync agent-foundry validate
+
+      # Type stripping needs Node >= 22.6; the suite has no runtime deps, so no npm install.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Agent UI TypeScript tests
+        working-directory: payloads/agent/ui/tests/ts
+        run: npm test
+
+  # ---------------------------------------------------------------------------
+  # Packaged example smoke (wheel + fresh venv; init every example; no Databricks)
+  # ---------------------------------------------------------------------------
+  cli-package-smoke:
+    name: Packaged example smoke
+    timeout-minutes: 30
+    if: github.repository != 'databricks-solutions/databricks-agent-foundry'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+
+      - name: Install from lock (public PyPI)
+        run: uv sync --frozen --extra runtime --extra dev
+
+      # Fresh-venv ``uv pip install .`` uses UV_INDEX from the package index. A skip
+      # on missing index is a fail on this job (CI=true).
+      - name: Run packaged CLI / wheel smokes
+        env:
+          AGENT_FOUNDRY_TELEMETRY_DISABLED: "true"
+        run: uv run --no-sync python -m pytest -m component --run-component -v --tb=short
+
+  type-check:
+    name: Static checks (mypy)
+    if: github.repository != 'databricks-solutions/databricks-agent-foundry'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+
+      # Bare ``mypy`` reads [tool.mypy] files, which now covers the public
+      # surface, agent_foundry core/CLI, bricks, and payloads. Those trees
+      # import runtime/eval/call/extraction/rest_mcp packages, so install
+      # ``all`` or the first step is 200+ import-not-found errors.
+      - name: Install from lock (public PyPI)
+        run: uv sync --frozen --extra all
+
+      # Strict gate: ``mypy`` with no path uses [tool.mypy] files
+      # (public + core + bricks + payloads) and the per-module strict
+      # overrides. Issue #159 originally scoped this to public/; the
+      # files list has since expanded (#225 / #228-#232).
+      - name: mypy (strict, configured files)
+        run: uv run --no-sync mypy
+
+      # Filtered gate: framework-wide bug-shape detection.  Disables
+      # the bulk style codes via [tool.mypy] disable_error_code; the
+      # strict override above re-enables them for the public surface.
+      # Per-brick narrowing happens in the #225 epic.  Issue #227.
+      - name: mypy (filtered, framework-wide)
+        run: uv run --no-sync mypy agent_foundry/
+
+      # Filtered gate also runs on the top-level tests/ directory
+      # (PR-B of the typing roadmap).
+      - name: mypy (filtered, tests/)
+        run: uv run --no-sync mypy tests/
+
+      # Filtered gate landed on ``bricks/`` after the PR-C series
+      # (#240, #241, #242, this PR; tracked under #238) cleared the
+      # 299-error baseline.  Covers all 9 bricks plus their inline
+      # ``tests/`` subfolders.
+      - name: mypy (filtered, bricks/)
+        run: uv run --no-sync mypy bricks/

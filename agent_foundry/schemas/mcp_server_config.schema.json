@@ -1,0 +1,562 @@
+{
+  "$defs": {
+    "ArgPassthrough": {
+      "description": "One field-to-arg mapping in :class:`AutoPollConfig.forward_args`.\n\nThe submit response is parsed as JSON; ``from_field`` is a dotted\npath inside that payload (``conversation_id``, ``status.state``);\nthe looked-up value is passed to the poll tool under ``to_arg``.\n\nTwo forwards are required for managed Genie (``conversation_id`` and\n``message_id``); managed SQL needs only ``statement_id``.  Modelled\nas an explicit list rather than a flat dict so the deploy state JSON\nkeeps a stable order and the alias rules are explicit.",
+      "properties": {
+        "from_field": {
+          "title": "From Field",
+          "type": "string"
+        },
+        "to_arg": {
+          "title": "To Arg",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_field",
+        "to_arg"
+      ],
+      "title": "ArgPassthrough",
+      "type": "object"
+    },
+    "AutoPollConfig": {
+      "description": "Wrapper-side polling for async ``submit -> poll`` tool patterns.\n\nSeveral Databricks-managed MCP servers expose a two-call shape: the\nsubmit tool returns a receipt with a status ``PENDING`` (or similar),\nand a poll tool re-fetches the same receipt until terminal.  When\nauto-poll is enabled, the wrapper absorbs the polling cycle: the\nLLM sees ONE call to the trigger tool and ONE response (the\nterminal poll result), with no intermediate \"tool cells\" cluttering\nthe chat UI.\n\nPer-type defaults (:func:`ManagedSqlServerConfig._default_auto_poll`,\n:func:`ManagedGenieServerConfig._default_auto_poll`) ship out of the\nbox; the YAML knob ``auto_poll: true`` selects the type default,\n``auto_poll: false`` disables, and ``auto_poll: { ... }`` overrides\nfully.\n\nNotes:\n- When ``hide_poll_tool`` is True the poll tool is dropped from\n  :meth:`list_tools` -- the LLM cannot call it directly.  The\n  wrapper still needs ``poll_with`` in ``tools.allow`` to map the\n  alias back to the upstream name internally.\n- On timeout the wrapper returns the LAST poll result it saw (still\n  pending).  The upstream's own message is preserved so the LLM can\n  explain the timeout to the user.",
+      "properties": {
+        "backoff_factor": {
+          "default": 2.0,
+          "minimum": 1.0,
+          "title": "Backoff Factor",
+          "type": "number"
+        },
+        "forward_args": {
+          "items": {
+            "$ref": "#/$defs/ArgPassthrough"
+          },
+          "title": "Forward Args",
+          "type": "array"
+        },
+        "hide_poll_tool": {
+          "default": true,
+          "title": "Hide Poll Tool",
+          "type": "boolean"
+        },
+        "initial_interval_s": {
+          "default": 0.5,
+          "exclusiveMinimum": 0,
+          "title": "Initial Interval S",
+          "type": "number"
+        },
+        "max_interval_s": {
+          "default": 5.0,
+          "exclusiveMinimum": 0,
+          "title": "Max Interval S",
+          "type": "number"
+        },
+        "pending_states": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Pending States",
+          "type": "array"
+        },
+        "poll_with": {
+          "title": "Poll With",
+          "type": "string"
+        },
+        "state_field": {
+          "default": "status.state",
+          "title": "State Field",
+          "type": "string"
+        },
+        "timeout_s": {
+          "default": 60.0,
+          "exclusiveMinimum": 0,
+          "title": "Timeout S",
+          "type": "number"
+        },
+        "trigger": {
+          "title": "Trigger",
+          "type": "string"
+        }
+      },
+      "required": [
+        "trigger",
+        "poll_with",
+        "forward_args"
+      ],
+      "title": "AutoPollConfig",
+      "type": "object"
+    },
+    "CustomAppServerConfig": {
+      "description": "User-hosted MCP server reached at ``{app_url}`` (full URL).\n\nAuth is OBO-only; the runtime hook enforces this when constructing the\nwrapped server.",
+      "properties": {
+        "app_url": {
+          "title": "App Url",
+          "type": "string"
+        },
+        "auto_poll": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AutoPollConfig"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "title": "Auto Poll"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "prompts": {
+          "$ref": "#/$defs/PromptsConfig"
+        },
+        "resources": {
+          "$ref": "#/$defs/ResourcesConfig"
+        },
+        "tools": {
+          "$ref": "#/$defs/ToolsConfig"
+        },
+        "type": {
+          "const": "custom_app",
+          "default": "custom_app",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tools",
+        "app_url"
+      ],
+      "title": "CustomAppServerConfig",
+      "type": "object"
+    },
+    "ExternalServerConfig": {
+      "description": "``{host}/api/2.0/mcp/external/{connection_name}`` -- external proxied via a UC connection.",
+      "properties": {
+        "auto_poll": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AutoPollConfig"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "title": "Auto Poll"
+        },
+        "connection_name": {
+          "title": "Connection Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "prompts": {
+          "$ref": "#/$defs/PromptsConfig"
+        },
+        "resources": {
+          "$ref": "#/$defs/ResourcesConfig"
+        },
+        "tools": {
+          "$ref": "#/$defs/ToolsConfig"
+        },
+        "type": {
+          "const": "external",
+          "default": "external",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tools",
+        "connection_name"
+      ],
+      "title": "ExternalServerConfig",
+      "type": "object"
+    },
+    "ManagedFunctionsServerConfig": {
+      "description": "``{host}/api/2.0/mcp/functions/{catalog}/{schema}`` -- UC functions.",
+      "properties": {
+        "auto_poll": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AutoPollConfig"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "title": "Auto Poll"
+        },
+        "catalog": {
+          "title": "Catalog",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "prompts": {
+          "$ref": "#/$defs/PromptsConfig"
+        },
+        "resources": {
+          "$ref": "#/$defs/ResourcesConfig"
+        },
+        "schema": {
+          "title": "Schema",
+          "type": "string"
+        },
+        "tools": {
+          "$ref": "#/$defs/ToolsConfig"
+        },
+        "type": {
+          "const": "managed_functions",
+          "default": "managed_functions",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tools",
+        "catalog",
+        "schema"
+      ],
+      "title": "ManagedFunctionsServerConfig",
+      "type": "object"
+    },
+    "ManagedGenieServerConfig": {
+      "description": "``{host}/api/2.0/mcp/genie/{space_id}`` -- Genie Spaces.",
+      "properties": {
+        "auto_poll": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AutoPollConfig"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "title": "Auto Poll"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "prompts": {
+          "$ref": "#/$defs/PromptsConfig"
+        },
+        "resources": {
+          "$ref": "#/$defs/ResourcesConfig"
+        },
+        "space_id": {
+          "title": "Space Id",
+          "type": "string"
+        },
+        "tools": {
+          "$ref": "#/$defs/ToolsConfig"
+        },
+        "type": {
+          "const": "managed_genie",
+          "default": "managed_genie",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tools",
+        "space_id"
+      ],
+      "title": "ManagedGenieServerConfig",
+      "type": "object"
+    },
+    "ManagedSqlServerConfig": {
+      "description": "``{host}/api/2.0/mcp/sql`` -- Databricks SQL (no extra fields).",
+      "properties": {
+        "auto_poll": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AutoPollConfig"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "title": "Auto Poll"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "prompts": {
+          "$ref": "#/$defs/PromptsConfig"
+        },
+        "resources": {
+          "$ref": "#/$defs/ResourcesConfig"
+        },
+        "tools": {
+          "$ref": "#/$defs/ToolsConfig"
+        },
+        "type": {
+          "const": "managed_sql",
+          "default": "managed_sql",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tools"
+      ],
+      "title": "ManagedSqlServerConfig",
+      "type": "object"
+    },
+    "ManagedVectorSearchServerConfig": {
+      "description": "``{host}/api/2.0/mcp/vector-search/{catalog}/{schema}`` -- Vector Search.",
+      "properties": {
+        "auto_poll": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AutoPollConfig"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "title": "Auto Poll"
+        },
+        "catalog": {
+          "title": "Catalog",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "prompts": {
+          "$ref": "#/$defs/PromptsConfig"
+        },
+        "resources": {
+          "$ref": "#/$defs/ResourcesConfig"
+        },
+        "schema": {
+          "title": "Schema",
+          "type": "string"
+        },
+        "tools": {
+          "$ref": "#/$defs/ToolsConfig"
+        },
+        "type": {
+          "const": "managed_vector_search",
+          "default": "managed_vector_search",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tools",
+        "catalog",
+        "schema"
+      ],
+      "title": "ManagedVectorSearchServerConfig",
+      "type": "object"
+    },
+    "PromptsConfig": {
+      "description": "Server-side prompt consumption.\n\nDisabled by default (\"discover but do not consume\"). Setting\n``enabled: true`` with an empty ``allow`` is legal but warned about\nby ``payloads/agent/deploy/mcp/validate.py`` -- usually a config mistake.\n\n``cache: per_process`` is a forward-compat literal; PR 1 rejects it\nso callers fail fast rather than silently downgrading.",
+      "properties": {
+        "allow": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allow",
+          "type": "array"
+        },
+        "cache": {
+          "default": "per_conversation",
+          "enum": [
+            "per_request",
+            "per_conversation",
+            "per_process"
+          ],
+          "title": "Cache",
+          "type": "string"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "inject_into": {
+          "default": "dynamic_instructions",
+          "enum": [
+            "dynamic_instructions",
+            "system_prompt",
+            "none"
+          ],
+          "title": "Inject Into",
+          "type": "string"
+        }
+      },
+      "title": "PromptsConfig",
+      "type": "object"
+    },
+    "ResourcesConfig": {
+      "description": "Server-side resource consumption (URI-keyed read-only data).\n\nPR 1 only models the shape; the ``read_tool`` exposure path lands in\nPR 4 (#110). ``allow`` accepts exact URIs *or* glob patterns -- glob\nis the natural fit for content-addressable servers.",
+      "properties": {
+        "allow": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allow",
+          "type": "array"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "expose_as": {
+          "default": "read_tool",
+          "enum": [
+            "read_tool",
+            "none"
+          ],
+          "title": "Expose As",
+          "type": "string"
+        }
+      },
+      "title": "ResourcesConfig",
+      "type": "object"
+    },
+    "ToolAllowEntry": {
+      "description": "One allow-list entry that can glob-match upstream and rename.\n\nTwo motivating cases (see issue tracker for the agent-foundry\nframework):\n\n- **Glob upstream names.** Databricks managed Genie servers expose\n  ``query_space_<space_uuid>`` -- the UUID is impossible to put in\n  ``tools.allow`` as a literal across deploys. ``match: \"query_space_*\"``\n  lets the user write a stable allow-list.\n- **Rename to a clean alias.** Managed Functions / Vector Search\n  servers expose fully-qualified names like\n  ``<catalog>__<schema>__<func>``. Concatenated with the brick's\n  ``name_prefix`` the result is unreadable for the LLM.\n  ``expose_as: <short_name>`` collapses the upstream name to a\n  stable alias before ``name_prefix`` is applied.\n\nPatterns use :mod:`fnmatch`-style globs (``*``, ``?``, ``[abc]``);\nmatching is case-sensitive because MCP tool names are documented as\ncase-sensitive identifiers. When ``expose_as`` is omitted the alias\ndefaults to the upstream name, so a glob like ``\"poll_*\"`` keeps\neach matched name verbatim while still admitting them.",
+      "properties": {
+        "expose_as": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expose As"
+        },
+        "match": {
+          "title": "Match",
+          "type": "string"
+        }
+      },
+      "required": [
+        "match"
+      ],
+      "title": "ToolAllowEntry",
+      "type": "object"
+    },
+    "ToolsConfig": {
+      "description": "Tools surface for an MCP server.\n\n``allow`` is the explicit allow-list of tool names exposed to the\nLLM. Each entry is either a bare string (exact match against the\nupstream name, no rename -- the historical shape) or a\n:class:`ToolAllowEntry` mapping with ``match`` (string or glob) and\noptional ``expose_as`` (alias). The brick fails closed when\n``allow`` is empty.\n\n``name_prefix`` is left as ``None`` here; the deploy script injects\n``<server_name>__`` when unset so the model stays decoupled from\non-disk directory naming.",
+      "properties": {
+        "allow": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ToolAllowEntry"
+              }
+            ]
+          },
+          "title": "Allow",
+          "type": "array"
+        },
+        "default_meta": {
+          "additionalProperties": true,
+          "title": "Default Meta",
+          "type": "object"
+        },
+        "name_prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name Prefix"
+        }
+      },
+      "required": [
+        "allow"
+      ],
+      "title": "ToolsConfig",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "custom_app": "#/$defs/CustomAppServerConfig",
+      "external": "#/$defs/ExternalServerConfig",
+      "managed_functions": "#/$defs/ManagedFunctionsServerConfig",
+      "managed_genie": "#/$defs/ManagedGenieServerConfig",
+      "managed_sql": "#/$defs/ManagedSqlServerConfig",
+      "managed_vector_search": "#/$defs/ManagedVectorSearchServerConfig"
+    },
+    "propertyName": "type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ManagedFunctionsServerConfig"
+    },
+    {
+      "$ref": "#/$defs/ManagedGenieServerConfig"
+    },
+    {
+      "$ref": "#/$defs/ManagedVectorSearchServerConfig"
+    },
+    {
+      "$ref": "#/$defs/ManagedSqlServerConfig"
+    },
+    {
+      "$ref": "#/$defs/ExternalServerConfig"
+    },
+    {
+      "$ref": "#/$defs/CustomAppServerConfig"
+    }
+  ],
+  "title": "ServerConfig"
+}

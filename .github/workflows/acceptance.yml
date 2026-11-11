@@ -1,0 +1,366 @@
+name: Framework acceptance
+
+# Consumer journey at the candidate SHA. After the scenario matrix,
+# brick / payload / example canaries and Agent serving live all start
+# together -- they do not share workspace names. Each canary runs
+# ``uvx agent-foundry init`` -> scaffold (.github/actions/canary-journey
+# holds the shared setup). The brick canary destroys the previous run,
+# deploys and checks each brick, then destroys and checks it is gone.
+# Payload/example canaries gate on deploy -> wait -> smoke: the agent
+# answering over its public protocols, as a user would call it. They
+# update the stable ``af-<code>-canary`` names in place and stay up;
+# dispatch with ``reset`` to destroy them first. Tracing, evaluation and
+# Agent serving live are report-only and never fail the run.
+# Agent serving live calls Model Serving from the runner (reasoning /
+# prompt-cache client code), no App deploy.
+# Packaging is covered by ci.yml's component job, not here.
+# Every live job waits on ``framework-acceptance`` (required reviewers)
+# and authenticates by GitHub OIDC federation to the service principal:
+# no stored Databricks secret. Not scheduled.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      scenarios:
+        description: Comma-separated scenario ids (empty = bricks,agent_payload,portfolio_assistant; rest_mcp_payload and unity_gateway_assistant are opt-in)
+        required: false
+        default: ""
+      reset:
+        description: Destroy the payload/example canaries before deploying (drift cleanup)
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: framework-acceptance-${{ github.workflow }}
+  cancel-in-progress: false
+
+# Canary jobs use the framework-acceptance client secret when it is set,
+# otherwise GitHub OIDC federation (needs a policy on the service principal).
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  catalog:
+    name: Scenario matrix
+    if: github.repository != 'databricks-solutions/databricks-agent-foundry'
+    runs-on: ubuntu-latest
+    outputs:
+      bricks: ${{ steps.matrix.outputs.bricks }}
+      payloads: ${{ steps.matrix.outputs.payloads }}
+      examples: ${{ steps.matrix.outputs.examples }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Install from lock (public PyPI)
+        run: uv sync --frozen --extra dev
+      - id: matrix
+        env:
+          # rest_mcp_proxy is opt-in until its UC gateway -> App 401 is resolved.
+          AGENT_FOUNDRY_ACCEPTANCE_SCENARIOS: ${{ github.event.inputs.scenarios || 'bricks,agent_payload,portfolio_assistant' }}
+        run: |
+          for kind in brick payload example; do
+            uv run --no-sync python -m agent_foundry.testing.harness matrix --kind "$kind" > "/tmp/$kind.json"
+            ids=$(python -c 'import json, sys; print(json.dumps([r["id"] for r in json.load(open(sys.argv[1]))]))' "/tmp/$kind.json")
+            echo "${kind}s=$ids" >> "$GITHUB_OUTPUT"
+          done
+
+  serving:
+    name: Agent serving live
+    needs: catalog
+    # Model behaviour (reasoning, prompt cache), not the deployment: report only.
+    continue-on-error: true
+    environment: framework-acceptance
+    if: github.repository != 'databricks-solutions/databricks-agent-foundry'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DATABRICKS_AUTH_TYPE: ${{ secrets.DATABRICKS_CLIENT_SECRET == '' && 'github-oidc' || '' }}
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+      AGENT_FOUNDRY_TEST_CATALOG: ${{ vars.AGENT_FOUNDRY_TEST_CATALOG }}
+      AGENT_FOUNDRY_REQUIRE_LIVE: "1"
+      AGENT_FOUNDRY_TELEMETRY_DISABLED: "true"
+      AGENT_FOUNDRY_SKIP_DEFAULT_WORKSPACE_CLIENT: "false"
+      FRAMEWORK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      # Thinking / cache checks call serving from this runner, not the App.
+      FOUNDRY_REASONING_E2E_ENDPOINT: databricks-claude-sonnet-5-5
+      # Sonnet 5.5 has not been returning cache_read_input_tokens > 0.
+      FOUNDRY_PROMPT_CACHE_E2E_ENDPOINT: databricks-claude-sonnet-4-5
+      # Unity Gateway variants of the same checks; empty skips them.
+      AGENT_FOUNDRY_TEST_MODEL_SERVICE: ${{ vars.AGENT_FOUNDRY_TEST_MODEL_SERVICE }}
+      AGENT_FOUNDRY_TEST_GATEWAY_SKILL: ${{ vars.AGENT_FOUNDRY_TEST_GATEWAY_SKILL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.FRAMEWORK_SHA }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Install from lock (public PyPI)
+        run: uv sync --frozen --extra runtime --extra dev
+      - name: Serving live checks
+        run: |
+          uv run --no-sync python -m pytest -q payloads/agent/tests/live/runtime \
+            -m live --run-live --junitxml="$RUNNER_TEMP/acceptance-junit-serving.xml"
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: acceptance-serving-${{ github.run_id }}
+          path: ${{ runner.temp }}/acceptance-junit-serving.xml
+          if-no-files-found: warn
+
+  brick:
+    name: Brick canary ${{ matrix.scenario }}
+    needs: catalog
+    if: (needs.catalog.outputs.bricks != '[]') && (github.repository != 'databricks-solutions/databricks-agent-foundry')
+    environment: framework-acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.catalog.outputs.bricks) }}
+    env:
+      DATABRICKS_AUTH_TYPE: ${{ secrets.DATABRICKS_CLIENT_SECRET == '' && 'github-oidc' || '' }}
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+      AGENT_FOUNDRY_TEST_CATALOG: ${{ vars.AGENT_FOUNDRY_TEST_CATALOG }}
+      AGENT_FOUNDRY_TEST_VS_ENDPOINT: ${{ vars.AGENT_FOUNDRY_TEST_VS_ENDPOINT }}
+      AGENT_FOUNDRY_RUN_ID: canary
+      AGENT_FOUNDRY_REQUIRE_LIVE: "1"
+      AGENT_FOUNDRY_TELEMETRY_DISABLED: "true"
+      # PR runs pin the head commit; ``github.sha`` there is the synthetic merge ref.
+      FRAMEWORK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      FRAMEWORK_SPEC: agent-foundry @ git+https://github.com/${{ github.repository }}.git@${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.FRAMEWORK_SHA }}
+      - name: Canary journey
+        id: journey
+        uses: ./.github/actions/canary-journey
+        with:
+          scenario: ${{ matrix.scenario }}
+          framework-spec: ${{ env.FRAMEWORK_SPEC }}
+          framework-sha: ${{ env.FRAMEWORK_SHA }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          run-id: ${{ env.AGENT_FOUNDRY_RUN_ID }}
+          github-token: ${{ github.token }}
+          destroy-first: "true"
+      - name: Deploy and check each brick
+        # Scaffolds are in deploy order; checks[i] verifies scaffolds[i]
+        # against what ``deploy --only`` just published.
+        env:
+          PROJECT: ${{ steps.journey.outputs.project }}
+          PROJECT_DIR: ${{ steps.journey.outputs.project-dir }}
+          AGENT_FOUNDRY_PROJECT_ROOT: ${{ steps.journey.outputs.project-dir }}
+          AGENT_FOUNDRY_SKIP_DEFAULT_WORKSPACE_CLIENT: "false"
+        run: |
+          mapfile -t bricks < <(python -c 'import json; print("\n".join(json.load(open("/tmp/prep.json"))["scaffolds"]))')
+          mapfile -t checks < <(python -c 'import json; print("\n".join(json.load(open("/tmp/prep.json"))["checks"]))')
+          for i in "${!bricks[@]}"; do
+            deploy_vars=()
+            if [ "${bricks[$i]}" = vector_indexes ]; then
+              # The index syncs from the data_domains scaffold's CDF-enabled docs table.
+              if [ -z "$AGENT_FOUNDRY_TEST_VS_ENDPOINT" ]; then
+                echo "::error::vars.AGENT_FOUNDRY_TEST_VS_ENDPOINT is not set"; exit 1
+              fi
+              docs_schema=$(uv run --no-sync python -c "import sys, tomllib, yaml; from pathlib import Path; from agent_foundry.variables import substitute; inst = Path(sys.argv[1]); raw = yaml.safe_load((inst / 'data_domains/example_domain/domain.yml').read_text(encoding='utf-8'))['domain']['schema']; prefix = tomllib.loads((inst / 'foundry.toml').read_text(encoding='utf-8'))['schema_prefix']; print(substitute(raw, {'schema_prefix': prefix}))" "$PROJECT_DIR/instances/$PROJECT")
+              deploy_vars=(--vars "schema=$docs_schema" --vars source_table=docs \
+                --vars index_name=canary_docs_index --vars "vs_endpoint_name=$AGENT_FOUNDRY_TEST_VS_ENDPOINT")
+            fi
+            echo "::group::deploy --only ${bricks[$i]}"
+            (cd "$PROJECT_DIR" && uv run agent-foundry deploy --instance "$PROJECT" --target dev --only "${bricks[$i]}" "${deploy_vars[@]}")
+            echo "::endgroup::"
+            uv run --no-sync python -m pytest -q "${checks[$i]}" -m live --run-live \
+              --junitxml="$RUNNER_TEMP/acceptance-junit-$i.xml"
+          done
+      - name: Destroy
+        working-directory: ${{ steps.journey.outputs.project-dir }}
+        env:
+          PROJECT: ${{ steps.journey.outputs.project }}
+        run: uv run agent-foundry destroy --instance "$PROJECT" --target dev --force
+      - name: Gone checks
+        env:
+          AGENT_FOUNDRY_PROJECT_ROOT: ${{ steps.journey.outputs.project-dir }}
+          AGENT_FOUNDRY_SKIP_DEFAULT_WORKSPACE_CLIENT: "false"
+        run: |
+          mapfile -t checks < <(python -c 'import json; print("\n".join(json.load(open("/tmp/prep.json"))["checks"]))')
+          uv run --no-sync python -m pytest -q "${checks[@]}" -m gone --run-live --run-gone \
+            --junitxml="$RUNNER_TEMP/acceptance-junit-gone.xml"
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: acceptance-${{ matrix.scenario }}-${{ github.run_id }}
+          # Repo-root foundry.toml and prep.json carry the (secret) host; keep them out.
+          path: |
+            ${{ runner.temp }}/acceptance-junit*.xml
+            ${{ steps.journey.outputs.project-dir }}/instances/${{ steps.journey.outputs.project }}/foundry.toml
+            ${{ steps.journey.outputs.project-dir }}/uv.lock
+          if-no-files-found: warn
+
+  payload:
+    name: Payload canary ${{ matrix.scenario }}
+    needs: catalog
+    if: (needs.catalog.outputs.payloads != '[]') && (github.repository != 'databricks-solutions/databricks-agent-foundry')
+    environment: framework-acceptance
+    runs-on: ubuntu-latest
+    # agent_payload builds a Whisper model and a GPU endpoint (scenarios.toml: 150 min).
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.catalog.outputs.payloads) }}
+    env:
+      DATABRICKS_AUTH_TYPE: ${{ secrets.DATABRICKS_CLIENT_SECRET == '' && 'github-oidc' || '' }}
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+      AGENT_FOUNDRY_TEST_CATALOG: ${{ vars.AGENT_FOUNDRY_TEST_CATALOG }}
+      AGENT_FOUNDRY_RUN_ID: canary
+      AGENT_FOUNDRY_REQUIRE_LIVE: "1"
+      AGENT_FOUNDRY_TELEMETRY_DISABLED: "true"
+      FRAMEWORK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      FRAMEWORK_SPEC: agent-foundry @ git+https://github.com/${{ github.repository }}.git@${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.FRAMEWORK_SHA }}
+      - name: Canary journey
+        id: journey
+        uses: ./.github/actions/canary-journey
+        with:
+          scenario: ${{ matrix.scenario }}
+          framework-spec: ${{ env.FRAMEWORK_SPEC }}
+          framework-sha: ${{ env.FRAMEWORK_SHA }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          run-id: ${{ env.AGENT_FOUNDRY_RUN_ID }}
+          github-token: ${{ github.token }}
+          destroy-first: ${{ github.event.inputs.reset == 'true' }}
+      - name: Deploy
+        working-directory: ${{ steps.journey.outputs.project-dir }}
+        env:
+          PROJECT: ${{ steps.journey.outputs.project }}
+        run: uv run agent-foundry deploy --instance "$PROJECT" --target dev
+      - name: Wait for App
+        working-directory: ${{ steps.journey.outputs.project-dir }}
+        env:
+          PROJECT: ${{ steps.journey.outputs.project }}
+        run: uv run agent-foundry wait --instance "$PROJECT" --target dev
+      - name: Smoke
+        working-directory: ${{ steps.journey.outputs.project-dir }}
+        env:
+          PROJECT: ${{ steps.journey.outputs.project }}
+        run: uv run agent-foundry smoke --instance "$PROJECT" --target dev
+      # Report-only from here: needs the generated repo's local deploy state,
+      # so it runs in this job, and a failure never fails the canary.
+      - name: Report tracing and observability
+        continue-on-error: true
+        env:
+          PROJECT: ${{ steps.journey.outputs.project }}
+          PROJECT_DIR: ${{ steps.journey.outputs.project-dir }}
+          AGENT_FOUNDRY_PROJECT_ROOT: ${{ steps.journey.outputs.project-dir }}
+          AGENT_FOUNDRY_SKIP_DEFAULT_WORKSPACE_CLIENT: "false"
+        run: |
+          [ -f "$PROJECT_DIR/instances/$PROJECT/payloads/agent/payload.yml" ] || exit 0
+          uv run --no-sync python -m pytest -q payloads/agent/tests/live/test_tracing.py \
+            payloads/agent/tests/live/test_observability.py -m live --run-live \
+            --junitxml="$RUNNER_TEMP/acceptance-junit-report.xml"
+      - name: Report evaluation
+        continue-on-error: true
+        working-directory: ${{ steps.journey.outputs.project-dir }}
+        env:
+          PROJECT: ${{ steps.journey.outputs.project }}
+        run: |
+          [ -f "instances/$PROJECT/evaluation/eval_config.yml" ] || exit 0
+          uv run agent-foundry eval --instance "$PROJECT" --target dev
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: acceptance-${{ matrix.scenario }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/acceptance-junit-report.xml
+            ${{ steps.journey.outputs.project-dir }}/instances/${{ steps.journey.outputs.project }}/foundry.toml
+            ${{ steps.journey.outputs.project-dir }}/uv.lock
+          if-no-files-found: warn
+
+  example:
+    name: Example canary ${{ matrix.scenario }}
+    needs: catalog
+    if: (needs.catalog.outputs.examples != '[]') && (github.repository != 'databricks-solutions/databricks-agent-foundry')
+    environment: framework-acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.catalog.outputs.examples) }}
+    env:
+      DATABRICKS_AUTH_TYPE: ${{ secrets.DATABRICKS_CLIENT_SECRET == '' && 'github-oidc' || '' }}
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+      AGENT_FOUNDRY_TEST_CATALOG: ${{ vars.AGENT_FOUNDRY_TEST_CATALOG }}
+      AGENT_FOUNDRY_RUN_ID: canary
+      AGENT_FOUNDRY_REQUIRE_LIVE: "1"
+      AGENT_FOUNDRY_TELEMETRY_DISABLED: "true"
+      FRAMEWORK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      FRAMEWORK_SPEC: agent-foundry @ git+https://github.com/${{ github.repository }}.git@${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.FRAMEWORK_SHA }}
+      - name: Canary journey
+        id: journey
+        uses: ./.github/actions/canary-journey
+        with:
+          scenario: ${{ matrix.scenario }}
+          framework-spec: ${{ env.FRAMEWORK_SPEC }}
+          framework-sha: ${{ env.FRAMEWORK_SHA }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          run-id: ${{ env.AGENT_FOUNDRY_RUN_ID }}
+          github-token: ${{ github.token }}
+          destroy-first: ${{ github.event.inputs.reset == 'true' }}
+          # Only agent-foundry verbs in the generated repo; its own .venv is enough.
+          install-checkout: "false"
+      - name: Deploy
+        working-directory: ${{ steps.journey.outputs.project-dir }}
+        env:
+          PROJECT: ${{ steps.journey.outputs.project }}
+        run: uv run agent-foundry deploy --instance "$PROJECT" --target dev
+      - name: Wait for App
+        working-directory: ${{ steps.journey.outputs.project-dir }}
+        env:
+          PROJECT: ${{ steps.journey.outputs.project }}
+        run: uv run agent-foundry wait --instance "$PROJECT" --target dev
+      - name: Smoke
+        # The example's smoke.yml adds its own questions to the payload probes.
+        working-directory: ${{ steps.journey.outputs.project-dir }}
+        env:
+          PROJECT: ${{ steps.journey.outputs.project }}
+        run: uv run agent-foundry smoke --instance "$PROJECT" --target dev
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: acceptance-${{ matrix.scenario }}-${{ github.run_id }}
+          path: |
+            ${{ steps.journey.outputs.project-dir }}/instances/${{ steps.journey.outputs.project }}/foundry.toml
+            ${{ steps.journey.outputs.project-dir }}/uv.lock
+          if-no-files-found: warn

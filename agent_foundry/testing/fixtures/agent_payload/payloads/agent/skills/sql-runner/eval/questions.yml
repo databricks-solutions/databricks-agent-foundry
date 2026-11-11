@@ -1,0 +1,3 @@
+questions:
+  - question: "Run SELECT current_date() for me"
+    expected_tools: [execute_sql_read_only]

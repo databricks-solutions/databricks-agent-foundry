@@ -1,0 +1,79 @@
+# Databricks App container configuration (framework default)
+# ===========================================================
+# Instances can override specific env vars by creating their own
+# app/app.yaml. Env entries are merged by name; command is
+# replaced if specified.
+
+command:
+  - python
+  - -m
+  - bricks.app.scripts.start_app
+
+env:
+  # PYTHONPATH=. dropped in #112: the wheel-based deploy installs the
+  # framework into the App venv, so module resolution no longer depends
+  # on the workspace source dir being on PYTHONPATH.
+  - name: AGENT_MODULE
+    value: "payloads.agent.runtime.agent"
+
+  # Issue #143: explicit project-root contract for the runtime.
+  # Resolved against CWD at boot (Apps starts the container in the
+  # synced source dir).
+  - name: AGENT_FOUNDRY_PROJECT_ROOT
+    value: "."
+
+  # Points at the on-disk instance folder, which staging copies to
+  # ``instances/<instance_dir.name>``. Templated on the instance dir
+  # name (not ``app_name``) so an ``app_name`` override -- e.g. for the
+  # 30-char Databricks Apps limit -- does not break runtime instance
+  # resolution (skills + MCP loading). See payloads/agent/deploy/spec.py.
+  - name: INSTANCE_DIR
+    value: "instances/${var.instance_dir_name}"
+
+  - name: API_PROXY
+    value: "http://localhost:8000/invocations"
+
+  - name: CHAT_APP_PORT
+    value: "3000"
+
+  - name: CHAT_PROXY_TIMEOUT_SECONDS
+    value: "300"
+
+  - name: DATABRICKS_WAREHOUSE_ID
+    value: "${var.warehouse_id}"
+
+  - name: MLFLOW_TRACING_SQL_WAREHOUSE_ID
+    value: "${var.warehouse_id}"
+
+  - name: MLFLOW_EXPERIMENT_ID
+    valueFrom: feedback-experiment
+
+  - name: TRACING_UC_DESTINATION
+    value: "${var.catalog}.${var.schema_prefix}_agent.mlflow_experiment"
+
+  # The agent's own schema, resolved here because the runtime cannot
+  # derive it: `catalog` lives in the repo-root foundry.toml, which is
+  # per-operator and not staged into the App.
+  - name: AGENT_SCHEMA
+    value: "${var.catalog}.${var.schema_prefix}_agent"
+
+  # The same two inputs, for `${var.catalog}` / `${var.schema_prefix}` in
+  # Unity Gateway FQNs, which the runtime resolves.
+  - name: AGENT_CATALOG
+    value: "${var.catalog}"
+
+  - name: AGENT_SCHEMA_PREFIX
+    value: "${var.schema_prefix}"
+
+  - name: TITLE_MODEL_ENDPOINT
+    value: "${var.llm_endpoint_name}"
+
+  # The payload's runtime toggles are deliberately absent from this file,
+  # and no payload-specific env belongs here: this brick default carries
+  # infra env only.  Those toggles are derived at deploy time from the
+  # single source -- ``payloads/agent/payload.yml`` ``spec`` -- and
+  # injected over this default by the agent payload adapter.  Their names
+  # are intentionally not repeated here; see the deriver
+  # ``payloads.agent.deploy.config.env_overrides_from_spec`` for the
+  # current set, and ``bricks/app/tests/unit/test_app_yaml_env_sync.py``,
+  # which fails if any of them is ever authored in this file.

@@ -1,0 +1,73 @@
+# Testing-owned scenario catalog. Not read by agent-foundry init.
+# Workspace host, catalog, and credentials live in env / CI environments.
+# kind picks the canary job: brick, then payload, then example.
+
+# Brick canary: scaffolds in deploy order; checks[i] verifies scaffolds[i].
+[[scenarios]]
+id = "bricks"
+kind = "brick"
+variant_id = "blank"
+lane = "canary"
+timeout_minutes = 100
+requires = ["warehouse", "vector_search", "genie"]
+scaffolds = ["warehouse", "data_domains", "sql_function", "genie_spaces", "vector_indexes", "jobs"]
+checks = [
+  "bricks/warehouse/tests/live",
+  "bricks/data/tests/live",
+  "bricks/sql_function/tests/live",
+  "bricks/genie/tests/live",
+  "bricks/vector_search/tests/live",
+  "bricks/job/tests/live",
+]
+
+# Payload canaries: the payload scaffold brings app, tracing and observability;
+# the agent payload also requires a warehouse (dedicated here). The gate is
+# ``agent-foundry smoke``, so payload and example scenarios list no checks.
+[[scenarios]]
+id = "agent_payload"
+kind = "payload"
+variant_id = "blank"
+lane = "canary"
+timeout_minutes = 150
+requires = ["warehouse"]
+scaffolds = ["warehouse", "payload", "evaluation", "speech_input"]
+# fixtures/agent_payload/: a SQL warehouse MCP, a sql-runner skill using it,
+# and a smoke question; user skills come with the payload scaffold.
+# speech_input builds the Whisper model and its GPU endpoint (scale to zero),
+# hence the longer timeout.
+fixture = true
+
+# Opt-in (name it in the scenarios input) until #517.
+[[scenarios]]
+id = "rest_mcp_payload"
+kind = "payload"
+variant_id = "blank"
+lane = "full"
+timeout_minutes = 60
+requires = []
+scaffolds = ["rest_mcp"]
+
+[[scenarios]]
+id = "rest_mcp_proxy"
+kind = "example"
+variant_id = "rest_mcp_proxy"
+lane = "canary"
+timeout_minutes = 40
+requires = []
+
+[[scenarios]]
+id = "portfolio_assistant"
+kind = "example"
+variant_id = "portfolio_assistant"
+lane = "full"
+timeout_minutes = 90
+requires = ["warehouse", "vector_search", "genie"]
+
+# Opt-in: needs the Unity AI Gateway previews on the workspace.
+[[scenarios]]
+id = "unity_gateway_assistant"
+kind = "example"
+variant_id = "unity_gateway_assistant"
+lane = "full"
+timeout_minutes = 60
+requires = ["warehouse"]

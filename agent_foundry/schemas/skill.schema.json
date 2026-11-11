@@ -1,0 +1,40 @@
+{
+  "description": "Contents of ``skills/<domain>/<skill>/skill.yml``.\n\n``tools`` here is a list of tool *names* (references into the skill's\n``tools.yml``), not the full tool objects -- those are in\n:class:`agent_foundry.contracts.tools.ToolManifest`.",
+  "properties": {
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "phase": {
+      "default": 999,
+      "title": "Phase",
+      "type": "integer"
+    },
+    "tools": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Tools",
+      "type": "array"
+    },
+    "triggers": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Triggers",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "SkillMetadata",
+  "type": "object"
+}

@@ -1,0 +1,37 @@
+# Genie Space Top-Level Configuration
+# ====================================
+# This file defines metadata for the Genie Space deployment.
+# Variable references (${var.xxx}) are resolved at deploy time
+# from foundry.toml (repo-root [targets.<target>] and the instance file).
+
+title: "Information Schema Explorer"
+description: "Explore Unity Catalog metadata -- tables, columns, and schemas. Deployable default using system.information_schema (available on every workspace)."
+warehouse_id: "${var.warehouse_id}"
+parent_path: "/Workspace${var.solution_root}"
+
+# The agent reaches this space through a managed_genie MCP server:
+# payloads/agent/mcp_servers/<name>/server.yml with
+#   space_id: "${var.genie_space_id__<this directory name>}"
+#
+# tool_name (optional, deprecated): binds a legacy skill tools.yml
+# entry (`type: genie`) to this space; removed with that format.
+# tool_name: "catalog_genie"
+
+# Permissions applied to the deployed Genie Space.
+# Levels: CAN_VIEW, CAN_RUN, CAN_EDIT, CAN_MANAGE
+#
+# Example -- a typical setup with viewer, analyst, and admin roles:
+#
+# permissions:
+#   - level: CAN_VIEW
+#     group_name: "sales_viewers"
+#   - level: CAN_RUN
+#     group_name: "sales_analysts"
+#   - level: CAN_MANAGE
+#     user_name: "admin@company.com"
+#
+# Use ${var.xxx} references for target-specific values:
+#   - level: CAN_RUN
+#     group_name: "${var.analyst_group}"
+
+permissions: []

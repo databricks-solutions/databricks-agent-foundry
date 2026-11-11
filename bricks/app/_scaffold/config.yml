@@ -1,0 +1,141 @@
+# yaml-language-server: $schema=../../../.agent-foundry/schemas/agent_app_config.schema.json
+#
+# Agent App default configuration (framework wiring)
+# ===================================================
+# Typed via agent_foundry.contracts.agent_app.AgentAppConfig. Unknown
+# top-level keys are rejected (extra="forbid") so a typo fails the
+# deploy instead of silently doing nothing.
+#
+# Instances can override any top-level key by creating their own
+# app/config.yml. Only the keys present in the instance file
+# replace the corresponding key here; the rest are kept as-is.
+#
+# All ${var.*} placeholders are resolved at deploy time from the
+# variables dict (foundry.toml target + instance, CLI --vars, state).
+
+# ---------------------------------------------------------------
+# Payloads -- which payload(s) this host mounts
+# ---------------------------------------------------------------
+# ``app/`` is a generic Databricks App host; each payload owns its
+# runtime surface under ``payloads/<name>/`` (config, skills,
+# mcp_servers, and the ``payload.yml`` adapter + spec that are the
+# single source for runtime toggles).  Issue #338.
+payloads:
+  - "agent"
+
+# ---------------------------------------------------------------
+# Compute size -- Databricks Apps container size
+# ---------------------------------------------------------------
+# One of: medium (default) | large. Large costs more than medium.
+compute_size: "medium"
+
+# ---------------------------------------------------------------
+# App Resources -- granted to the app's service principal
+# ---------------------------------------------------------------
+
+app_resources:
+  - name: "llm-endpoint"
+    serving_endpoint:
+      name: "${var.llm_endpoint_name}"
+      permission: "CAN_QUERY"
+
+  - name: "sql-warehouse"
+    sql_warehouse:
+      id: "${var.warehouse_id}"
+      permission: "CAN_USE"
+
+  - name: "trace-otel-logs"
+    uc_securable:
+      securable_full_name: "${var.catalog}.${var.schema_prefix}_agent.mlflow_experiment_otel_logs"
+      securable_type: "TABLE"
+      permission: "MODIFY"
+
+  - name: "trace-otel-metrics"
+    uc_securable:
+      securable_full_name: "${var.catalog}.${var.schema_prefix}_agent.mlflow_experiment_otel_metrics"
+      securable_type: "TABLE"
+      permission: "MODIFY"
+
+  - name: "trace-otel-spans"
+    uc_securable:
+      securable_full_name: "${var.catalog}.${var.schema_prefix}_agent.mlflow_experiment_otel_spans"
+      securable_type: "TABLE"
+      permission: "MODIFY"
+
+  - name: "trace-otel-annotations"
+    uc_securable:
+      securable_full_name: "${var.catalog}.${var.schema_prefix}_agent.mlflow_experiment_otel_annotations"
+      securable_type: "TABLE"
+      permission: "MODIFY"
+
+  - name: "trace-otel-unified"
+    uc_securable:
+      securable_full_name: "${var.catalog}.${var.schema_prefix}_agent.mlflow_experiment_trace_unified"
+      securable_type: "TABLE"
+      permission: "SELECT"
+
+  - name: "trace-otel-metadata"
+    uc_securable:
+      securable_full_name: "${var.catalog}.${var.schema_prefix}_agent.mlflow_experiment_trace_metadata"
+      securable_type: "TABLE"
+      permission: "SELECT"
+
+  - name: "feedback-experiment"
+    experiment:
+      experiment_id: "${var.experiment_id}"
+      permission: "CAN_EDIT"
+
+  # Lakebase Autoscaling -- persistent chat history and feedback storage.
+  # Only bound when the agent payload sets ``spec.ui.chat_history.enabled:
+  # true`` in payloads/agent/payload.yml (the default).  When chat history
+  # is opt-out, the agent payload's ``filter_app_resources`` drops this
+  # entry from ``app_resources`` before the resource list is built, so the
+  # App is not bound to a project that was never provisioned.
+  # The chat UI auto-connects via injected PG* env vars.
+  - name: "postgres"
+    postgres:
+      branch: "${var.lakebase_branch_path}"
+      database: "${var.lakebase_database_path}"
+      permission: "CAN_CONNECT_AND_CREATE"
+
+# ---------------------------------------------------------------
+# App Telemetry -- export App logs/metrics/spans to Unity Catalog
+# ---------------------------------------------------------------
+# ``catalog.schema`` or ``catalog.schema.prefix``; the App writes to
+# ``<prefix>_otel_logs``, ``<prefix>_otel_metrics`` and
+# ``<prefix>_otel_spans``, creating them if absent.  The default shares
+# the MLflow trace tables (the trace-otel-* resources above grant the SP
+# MODIFY on them).  Set to null to leave the App's telemetry untouched.
+telemetry_destination: "${var.tracing_destination}.${var.tracing_table_prefix}"
+
+# ---------------------------------------------------------------
+# SP Schema Grants -- applied via SQL after app creation
+# ---------------------------------------------------------------
+
+sp_grants:
+  - securable_type: "CATALOG"
+    securable_name: "${var.catalog}"
+    permissions:
+      - "USE CATALOG"
+
+  - securable_type: "SCHEMA"
+    securable_name: "${var.catalog}.${var.schema_prefix}_agent"
+    permissions:
+      - "USE SCHEMA"
+      - "CREATE MODEL"
+      - "CREATE MODEL VERSION"
+
+# ---------------------------------------------------------------
+# User Authorization -- OBO scopes (falls back to SP)
+# ---------------------------------------------------------------
+# Add or remove scopes when you add/remove tools that access
+# user-scoped data (Genie, Vector Search, UC metadata, etc.).
+
+user_authorization:
+  - sql
+  - dashboards.genie
+  - serving.serving-endpoints
+  - vectorsearch.vector-search-indexes
+  - catalog.catalogs:read
+  - catalog.schemas:read
+  - catalog.tables:read

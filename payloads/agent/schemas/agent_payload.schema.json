@@ -1,0 +1,2437 @@
+{
+  "$defs": {
+    "A2AAgentCapabilities": {
+      "description": "A2A capability flags advertised on the card.",
+      "properties": {
+        "push_notifications": {
+          "default": false,
+          "title": "Push Notifications",
+          "type": "boolean"
+        },
+        "streaming": {
+          "default": true,
+          "title": "Streaming",
+          "type": "boolean"
+        }
+      },
+      "title": "A2AAgentCapabilities",
+      "type": "object"
+    },
+    "A2AAgentCardConfig": {
+      "description": "Full agent card configuration.\n\nValidation rules:\n  - ``version`` must match a loose semver shape (``MAJOR.MINOR.PATCH``\n    with an optional pre-release / build suffix).\n  - ``skills`` must be non-empty -- a card without skills tells\n    external consumers nothing.\n  - Skill ``id`` values must be unique within the card -- duplicate\n    ids would silently collide on the wire and confuse clients.",
+      "properties": {
+        "capabilities": {
+          "$ref": "#/$defs/A2AAgentCapabilities"
+        },
+        "default_input_modes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Default Input Modes",
+          "type": "array"
+        },
+        "default_output_modes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Default Output Modes",
+          "type": "array"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "documentation_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Documentation Url"
+        },
+        "icon_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon Url"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/A2AAgentProvider"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "skills": {
+          "items": {
+            "$ref": "#/$defs/A2AAgentSkill"
+          },
+          "title": "Skills",
+          "type": "array"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "version",
+        "skills"
+      ],
+      "title": "A2AAgentCardConfig",
+      "type": "object"
+    },
+    "A2AAgentProvider": {
+      "description": "Optional organisation that publishes the agent.\n\nEmitted on the wire only when at least one field is set.",
+      "properties": {
+        "organization": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Organization"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "title": "A2AAgentProvider",
+      "type": "object"
+    },
+    "A2AAgentSkill": {
+      "description": "One external-facing skill in the agent card.\n\n``input_modes`` / ``output_modes`` default to ``None`` so the builder\ncan substitute the card-level defaults (``default_input_modes`` /\n``default_output_modes``) per skill -- keeping the authored YAML\nminimal when every skill uses the same modes.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "examples": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Examples",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "input_modes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Modes"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "output_modes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Modes"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ],
+      "title": "A2AAgentSkill",
+      "type": "object"
+    },
+    "A2AIntegration": {
+      "description": "``spec.integrations.a2a`` -- expose the agent via an A2A card.\n\nExtends :class:`~agent_foundry.contracts.a2a.A2AConfig` (card +\n``enable_v0_3_compat``) with the ``enabled`` mount toggle that\ndecides whether the ``/api/a2a`` routes + agent card are served.",
+      "properties": {
+        "card": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/A2AAgentCardConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "enable_v0_3_compat": {
+          "default": false,
+          "description": "Advertise a v0.3 AgentInterface alongside the v1.0 one and enable v0.3->v1.0 JSON-RPC payload translation in the SDK. Opt-in; required for clients still on the pre-1.0 A2A spec. When false (default) only the v1.0 interface is advertised and the SDK's compat translation layer is disabled.",
+          "title": "Enable V0 3 Compat",
+          "type": "boolean"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "A2AIntegration",
+      "type": "object"
+    },
+    "AgentCompactionRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.context.compaction`` -- summarize older turns of long chats.\n\nThe chat UI server replaces everything before the most recent turns\nwith a persisted summary once a request grows past the trigger.  The\nsummary lives in Lakebase next to the chat, so compaction needs\n``spec.ui.chat_history``; the transcript itself is never modified.",
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enabled"
+        },
+        "instructions": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instructions"
+        },
+        "keep_recent_turns": {
+          "default": 3,
+          "minimum": 1,
+          "title": "Keep Recent Turns",
+          "type": "integer"
+        },
+        "manual_action": {
+          "default": false,
+          "title": "Manual Action",
+          "type": "boolean"
+        },
+        "trigger_input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trigger Input Tokens"
+        }
+      },
+      "title": "AgentCompactionRuntime",
+      "type": "object"
+    },
+    "AgentContextRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.context`` -- what fills the context window, and how.\n\nGroups the levers that decide which bytes reach the model on every\nrequest and how they are cached.  Whether the user/time identity is\ninjected at all remains ``spec.runtime.inject_time_user``; *where*\nit lands is not authorable, because it must sit behind the cached\nprefix for caching to work at all.",
+      "properties": {
+        "compaction": {
+          "$ref": "#/$defs/AgentCompactionRuntime",
+          "default": {
+            "enabled": null,
+            "instructions": null,
+            "keep_recent_turns": 3,
+            "manual_action": false,
+            "trigger_input_tokens": null
+          }
+        },
+        "data_universe": {
+          "$ref": "#/$defs/AgentDataUniverseRuntime",
+          "default": {
+            "enabled": null,
+            "function": null,
+            "heading": null,
+            "max_rows": null,
+            "refresh_minutes": null,
+            "timeout_seconds": null
+          }
+        },
+        "memory": {
+          "$ref": "#/$defs/AgentMemoryRuntime",
+          "default": {
+            "enabled": false,
+            "index_max_entries": 50,
+            "max_entry_chars": 8000
+          }
+        },
+        "plan": {
+          "$ref": "#/$defs/AgentPlanRuntime",
+          "default": {
+            "enabled": false,
+            "max_chars": 8000
+          }
+        },
+        "prompt_cache": {
+          "$ref": "#/$defs/AgentPromptCacheRuntime",
+          "default": {
+            "enabled": null,
+            "rolling_ttl": null,
+            "static_ttl": null
+          }
+        },
+        "tool_result_clearing": {
+          "$ref": "#/$defs/AgentToolResultClearingRuntime",
+          "default": {
+            "clear_above_input_tokens": null,
+            "clear_at_least_chars": null,
+            "enabled": null,
+            "keep_tool_uses": null
+          }
+        }
+      },
+      "title": "AgentContextRuntime",
+      "type": "object"
+    },
+    "AgentDataUniverseRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.context.data_universe`` -- inject a catalog overview.\n\nReads a Unity Catalog table function -- one row per queryable view,\nwith its location, size and description -- and renders it into the\nsystem prompt at request assembly.  The agent then knows what data\nexists without spending a tool call to ask.\n\nThe *SQL* deliberately lives in the UC function, not here: the\nruntime only ever issues ``SELECT * FROM <function>()`` and renders\nwhatever columns come back, so the projection, wording, filtering and\nrow order are all changed with a ``CREATE OR REPLACE FUNCTION``\nthrough the ``sql_function`` brick -- no app redeploy.\n\nThe block joins the prompt-cached prefix, which is what makes it\nnearly free to carry, and also what makes it a liability if it is not\nbyte-stable: see ``refresh_minutes``.\n\nThe SQL read is opt-in.  ``enabled`` must be set explicitly whenever\nany other field in this block is authored, so a catalog query cannot\nbe configured by accident.",
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enabled"
+        },
+        "function": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Function"
+        },
+        "heading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heading"
+        },
+        "max_rows": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Rows"
+        },
+        "refresh_minutes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Refresh Minutes"
+        },
+        "timeout_seconds": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout Seconds"
+        }
+      },
+      "title": "AgentDataUniverseRuntime",
+      "type": "object"
+    },
+    "AgentIntegrationsSpec": {
+      "additionalProperties": false,
+      "description": "``spec.integrations`` -- expose the agent to other systems.",
+      "properties": {
+        "a2a": {
+          "$ref": "#/$defs/A2AIntegration",
+          "default": {
+            "card": null,
+            "enable_v0_3_compat": false,
+            "enabled": false
+          }
+        },
+        "mcp_server": {
+          "$ref": "#/$defs/MCPServerIntegration",
+          "default": {
+            "enabled": false
+          }
+        }
+      },
+      "title": "AgentIntegrationsSpec",
+      "type": "object"
+    },
+    "AgentMcpRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.tools.mcp`` -- the agent's Unity Gateway MCP services.\n\nPresence-based, like every tool provider: ``mcp_servers/*/server.yml``\nfiles mount workspace servers and a ``gateway`` block mounts gateway\nservices.  Both may be present; workspace tool names are claimed first.\n\n``source`` is deprecated.  ``unity_gateway`` without a ``gateway``\nblock still means an empty gateway block; ``workspace`` means nothing.",
+      "properties": {
+        "gateway": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GatewayMcpRuntime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "default": "workspace",
+          "enum": [
+            "workspace",
+            "unity_gateway"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "title": "AgentMcpRuntime",
+      "type": "object"
+    },
+    "AgentMemoryRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.context.memory`` -- long-term facts about the signed-in user, across chats.\n\nKept per user in the chat-history Lakebase, so it needs\n``spec.ui.chat_history``.  The state of the current work is the plan's\n(``spec.runtime.context.plan``).",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "index_max_entries": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Index Max Entries",
+          "type": "integer"
+        },
+        "max_entry_chars": {
+          "default": 8000,
+          "minimum": 1,
+          "title": "Max Entry Chars",
+          "type": "integer"
+        }
+      },
+      "title": "AgentMemoryRuntime",
+      "type": "object"
+    },
+    "AgentModelSettingsRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.model_settings`` -- raw request settings for the LLM.\n\nThe escape hatch for endpoint parameters the typed blocks do not\ncover (e.g. ``max_tokens``, ``temperature``).  ``extra_body`` is merged\ninto every chat-completions request body unvalidated, so a typo is\nonly caught by the endpoint.",
+      "properties": {
+        "extra_body": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extra Body"
+        }
+      },
+      "title": "AgentModelSettingsRuntime",
+      "type": "object"
+    },
+    "AgentPayloadConfig": {
+      "additionalProperties": false,
+      "description": "The ``payload:`` block when ``adapter: agent`` (typed spec).",
+      "properties": {
+        "adapter": {
+          "title": "Adapter",
+          "type": "string"
+        },
+        "requires": {
+          "items": {
+            "enum": [
+              "warehouse",
+              "tracing",
+              "observability"
+            ],
+            "type": "string"
+          },
+          "title": "Requires",
+          "type": "array"
+        },
+        "spec": {
+          "$ref": "#/$defs/AgentPayloadSpec",
+          "default": {
+            "extensions": {},
+            "integrations": {
+              "a2a": {
+                "card": null,
+                "enable_v0_3_compat": false,
+                "enabled": false
+              },
+              "mcp_server": {
+                "enabled": false
+              }
+            },
+            "runtime": {
+              "context": {
+                "compaction": {
+                  "enabled": null,
+                  "instructions": null,
+                  "keep_recent_turns": 3,
+                  "manual_action": false,
+                  "trigger_input_tokens": null
+                },
+                "data_universe": {
+                  "enabled": null,
+                  "function": null,
+                  "heading": null,
+                  "max_rows": null,
+                  "refresh_minutes": null,
+                  "timeout_seconds": null
+                },
+                "memory": {
+                  "enabled": false,
+                  "index_max_entries": 50,
+                  "max_entry_chars": 8000
+                },
+                "plan": {
+                  "enabled": false,
+                  "max_chars": 8000
+                },
+                "prompt_cache": {
+                  "enabled": null,
+                  "rolling_ttl": null,
+                  "static_ttl": null
+                },
+                "tool_result_clearing": {
+                  "clear_above_input_tokens": null,
+                  "clear_at_least_chars": null,
+                  "enabled": null,
+                  "keep_tool_uses": null
+                }
+              },
+              "finalize": null,
+              "inject_time_user": null,
+              "max_iterations": null,
+              "max_tool_calls_per_turn": null,
+              "model": null,
+              "model_settings": {
+                "extra_body": null
+              },
+              "reasoning": {
+                "budget_tokens": null,
+                "display": null,
+                "effort": null,
+                "emit": null,
+                "thinking": null
+              },
+              "reset": null,
+              "system_prompt": null,
+              "tools": {
+                "definitions": null,
+                "mcp": {
+                  "gateway": null,
+                  "source": "workspace"
+                },
+                "mcp_only": null,
+                "skills": {
+                  "gateway": null,
+                  "loading": null,
+                  "repository": null,
+                  "routing_header": null,
+                  "source": null,
+                  "unity_catalog": null,
+                  "user_skills": {
+                    "authoring_schema": null,
+                    "enabled": null,
+                    "exclude": [],
+                    "include": [],
+                    "locations": [],
+                    "max_skill_md_chars": 20000,
+                    "max_skills": 20,
+                    "store": "lakebase"
+                  }
+                }
+              }
+            },
+            "ui": {
+              "charts": {
+                "enabled": true
+              },
+              "chat_history": {
+                "enabled": true,
+                "project_name": null,
+                "retention_days": 365,
+                "sidebar_days": 30
+              },
+              "chat_layout": {
+                "width": "4xl"
+              },
+              "enabled": true,
+              "feedback": {
+                "enabled": true
+              },
+              "file_upload": {
+                "enabled": false,
+                "images": false,
+                "max_mb": 10
+              },
+              "kind": "chat",
+              "resources_sidebar": {
+                "enabled": false
+              },
+              "speech_input": {
+                "backend": "serving_invocations",
+                "enabled": false,
+                "endpoint": "",
+                "language": null,
+                "max_seconds": 300
+              },
+              "tool_output": {
+                "expanded": false
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "adapter"
+      ],
+      "title": "AgentPayloadConfig",
+      "type": "object"
+    },
+    "AgentPayloadSpec": {
+      "additionalProperties": false,
+      "description": "``payload.spec`` for the ``agent`` adapter (the full authoring body).",
+      "properties": {
+        "extensions": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Extensions",
+          "type": "object"
+        },
+        "integrations": {
+          "$ref": "#/$defs/AgentIntegrationsSpec",
+          "default": {
+            "a2a": {
+              "card": null,
+              "enable_v0_3_compat": false,
+              "enabled": false
+            },
+            "mcp_server": {
+              "enabled": false
+            }
+          }
+        },
+        "runtime": {
+          "$ref": "#/$defs/AgentRuntimeSpec",
+          "default": {
+            "context": {
+              "compaction": {
+                "enabled": null,
+                "instructions": null,
+                "keep_recent_turns": 3,
+                "manual_action": false,
+                "trigger_input_tokens": null
+              },
+              "data_universe": {
+                "enabled": null,
+                "function": null,
+                "heading": null,
+                "max_rows": null,
+                "refresh_minutes": null,
+                "timeout_seconds": null
+              },
+              "memory": {
+                "enabled": false,
+                "index_max_entries": 50,
+                "max_entry_chars": 8000
+              },
+              "plan": {
+                "enabled": false,
+                "max_chars": 8000
+              },
+              "prompt_cache": {
+                "enabled": null,
+                "rolling_ttl": null,
+                "static_ttl": null
+              },
+              "tool_result_clearing": {
+                "clear_above_input_tokens": null,
+                "clear_at_least_chars": null,
+                "enabled": null,
+                "keep_tool_uses": null
+              }
+            },
+            "finalize": null,
+            "inject_time_user": null,
+            "max_iterations": null,
+            "max_tool_calls_per_turn": null,
+            "model": null,
+            "model_settings": {
+              "extra_body": null
+            },
+            "reasoning": {
+              "budget_tokens": null,
+              "display": null,
+              "effort": null,
+              "emit": null,
+              "thinking": null
+            },
+            "reset": null,
+            "system_prompt": null,
+            "tools": {
+              "definitions": null,
+              "mcp": {
+                "gateway": null,
+                "source": "workspace"
+              },
+              "mcp_only": null,
+              "skills": {
+                "gateway": null,
+                "loading": null,
+                "repository": null,
+                "routing_header": null,
+                "source": null,
+                "unity_catalog": null,
+                "user_skills": {
+                  "authoring_schema": null,
+                  "enabled": null,
+                  "exclude": [],
+                  "include": [],
+                  "locations": [],
+                  "max_skill_md_chars": 20000,
+                  "max_skills": 20,
+                  "store": "lakebase"
+                }
+              }
+            }
+          }
+        },
+        "ui": {
+          "$ref": "#/$defs/AgentUISpec",
+          "default": {
+            "charts": {
+              "enabled": true
+            },
+            "chat_history": {
+              "enabled": true,
+              "project_name": null,
+              "retention_days": 365,
+              "sidebar_days": 30
+            },
+            "chat_layout": {
+              "width": "4xl"
+            },
+            "enabled": true,
+            "feedback": {
+              "enabled": true
+            },
+            "file_upload": {
+              "enabled": false,
+              "images": false,
+              "max_mb": 10
+            },
+            "kind": "chat",
+            "resources_sidebar": {
+              "enabled": false
+            },
+            "speech_input": {
+              "backend": "serving_invocations",
+              "enabled": false,
+              "endpoint": "",
+              "language": null,
+              "max_seconds": 300
+            },
+            "tool_output": {
+              "expanded": false
+            }
+          }
+        }
+      },
+      "title": "AgentPayloadSpec",
+      "type": "object"
+    },
+    "AgentPlanRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.context.plan`` -- the agent's goal and milestones for long work in one chat.\n\nKept with the chat in the chat-history Lakebase and deleted with it, so\nit needs ``spec.ui.chat_history``.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "max_chars": {
+          "default": 8000,
+          "minimum": 1,
+          "title": "Max Chars",
+          "type": "integer"
+        }
+      },
+      "title": "AgentPlanRuntime",
+      "type": "object"
+    },
+    "AgentPromptCacheRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.context.prompt_cache`` -- provider prompt caching.\n\nMarks the stable prefix of each request (tools + system prompt) and\nthe conversation tail with ``cache_control`` breakpoints so the\nprovider bills them as cache reads instead of fresh input.\n\nThe TTLs are a closed set rather than free strings on purpose: a\ntypo would be accepted by the gateway and silently turn every\nrequest into a full-price cache write.",
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enabled"
+        },
+        "rolling_ttl": {
+          "anyOf": [
+            {
+              "enum": [
+                "5m",
+                "1h"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rolling Ttl"
+        },
+        "static_ttl": {
+          "anyOf": [
+            {
+              "enum": [
+                "5m",
+                "1h"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Static Ttl"
+        }
+      },
+      "title": "AgentPromptCacheRuntime",
+      "type": "object"
+    },
+    "AgentReasoningRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.reasoning`` -- thinking models and their reasoning.\n\nEvery field is optional and nothing is sent when it is unset, so the\nendpoint's own default applies and non-thinking models see a request\nbyte-identical to one without this block.  Combinations the endpoint is\nknown to reject fail here, at load time; anything else is the\nendpoint's call and comes back as a 400 from the model.",
+      "properties": {
+        "budget_tokens": {
+          "anyOf": [
+            {
+              "minimum": 1024,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Budget Tokens"
+        },
+        "display": {
+          "anyOf": [
+            {
+              "enum": [
+                "summarized",
+                "omitted"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display"
+        },
+        "effort": {
+          "anyOf": [
+            {
+              "enum": [
+                "none",
+                "minimal",
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effort"
+        },
+        "emit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Emit"
+        },
+        "thinking": {
+          "anyOf": [
+            {
+              "enum": [
+                "adaptive",
+                "between_tools",
+                "enabled",
+                "disabled"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thinking"
+        }
+      },
+      "title": "AgentReasoningRuntime",
+      "type": "object"
+    },
+    "AgentRuntimeSpec": {
+      "additionalProperties": false,
+      "description": "``spec.runtime`` -- what the agent executes.\n\nEvery scalar is optional: the runtime view\n:class:`payloads.agent.config.AgentConfig` applies framework-level\ndefaults for any field left unset.",
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/AgentContextRuntime",
+          "default": {
+            "compaction": {
+              "enabled": null,
+              "instructions": null,
+              "keep_recent_turns": 3,
+              "manual_action": false,
+              "trigger_input_tokens": null
+            },
+            "data_universe": {
+              "enabled": null,
+              "function": null,
+              "heading": null,
+              "max_rows": null,
+              "refresh_minutes": null,
+              "timeout_seconds": null
+            },
+            "memory": {
+              "enabled": false,
+              "index_max_entries": 50,
+              "max_entry_chars": 8000
+            },
+            "plan": {
+              "enabled": false,
+              "max_chars": 8000
+            },
+            "prompt_cache": {
+              "enabled": null,
+              "rolling_ttl": null,
+              "static_ttl": null
+            },
+            "tool_result_clearing": {
+              "clear_above_input_tokens": null,
+              "clear_at_least_chars": null,
+              "enabled": null,
+              "keep_tool_uses": null
+            }
+          }
+        },
+        "finalize": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finalize"
+        },
+        "inject_time_user": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inject Time User"
+        },
+        "max_iterations": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Iterations"
+        },
+        "max_tool_calls_per_turn": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Tool Calls Per Turn"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "model_service": "#/$defs/ModelServiceModel",
+                  "serving_endpoint": "#/$defs/ServingEndpointModel"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ServingEndpointModel"
+                },
+                {
+                  "$ref": "#/$defs/ModelServiceModel"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "model_settings": {
+          "$ref": "#/$defs/AgentModelSettingsRuntime",
+          "default": {
+            "extra_body": null
+          }
+        },
+        "reasoning": {
+          "$ref": "#/$defs/AgentReasoningRuntime",
+          "default": {
+            "budget_tokens": null,
+            "display": null,
+            "effort": null,
+            "emit": null,
+            "thinking": null
+          }
+        },
+        "reset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reset"
+        },
+        "system_prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "System Prompt"
+        },
+        "tools": {
+          "$ref": "#/$defs/AgentToolsRuntime",
+          "default": {
+            "definitions": null,
+            "mcp": {
+              "gateway": null,
+              "source": "workspace"
+            },
+            "mcp_only": null,
+            "skills": {
+              "gateway": null,
+              "loading": null,
+              "repository": null,
+              "routing_header": null,
+              "source": null,
+              "unity_catalog": null,
+              "user_skills": {
+                "authoring_schema": null,
+                "enabled": null,
+                "exclude": [],
+                "include": [],
+                "locations": [],
+                "max_skill_md_chars": 20000,
+                "max_skills": 20,
+                "store": "lakebase"
+              }
+            }
+          }
+        }
+      },
+      "title": "AgentRuntimeSpec",
+      "type": "object"
+    },
+    "AgentSkillsRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.tools.skills`` -- where the agent's skills come from.\n\nThe developer's skills come from ``repository`` (the ``skills/``\nfolder, on by default) and ``unity_catalog``; both may be on.  The\nuser's own come from ``user_skills``, one store at a time.\n\n``source`` and ``gateway`` are deprecated: ``source: unity_gateway``\nmeans no repository skills, and ``gateway`` holds the Unity Catalog\nskills (with ``source: foundry`` only ``user_catalog``).  Readers use\n:meth:`repository_enabled`, :meth:`effective_gateway` and\n:meth:`lakebase_user_skills`, which answer for either form.",
+      "properties": {
+        "gateway": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GatewaySkillsRuntime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "loading": {
+          "anyOf": [
+            {
+              "enum": [
+                "eager",
+                "lazy"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Loading"
+        },
+        "repository": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RepositorySkills"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "routing_header": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Routing Header"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "enum": [
+                "foundry",
+                "unity_gateway"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "unity_catalog": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnityCatalogSkills"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "user_skills": {
+          "$ref": "#/$defs/UserSkills",
+          "default": {
+            "authoring_schema": null,
+            "enabled": null,
+            "exclude": [],
+            "include": [],
+            "locations": [],
+            "max_skill_md_chars": 20000,
+            "max_skills": 20,
+            "store": "lakebase"
+          }
+        }
+      },
+      "title": "AgentSkillsRuntime",
+      "type": "object"
+    },
+    "AgentToolResultClearingRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.context.tool_result_clearing`` -- client-side trimming.\n\nReplaces older ``function_call_output`` payloads with a short\nplaceholder immediately before each model call.  The full transcript\nin chat history is untouched; only the in-flight request is rewritten.\n\nClearing arms on either of two independent triggers -- see the field\ncomments -- because neither alone covers every conversation shape.",
+      "properties": {
+        "clear_above_input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clear Above Input Tokens"
+        },
+        "clear_at_least_chars": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clear At Least Chars"
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enabled"
+        },
+        "keep_tool_uses": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keep Tool Uses"
+        }
+      },
+      "title": "AgentToolResultClearingRuntime",
+      "type": "object"
+    },
+    "AgentToolsRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.tools`` -- everything about the agent's tools.\n\nTool providers live in their own authoring surfaces (``skills/`` and\n``mcp_servers/`` directories, the ``definitions`` list); this block\ncarries the cross-cutting *sourcing strategy* and per-provider modes.",
+      "properties": {
+        "definitions": {
+          "anyOf": [
+            {
+              "items": {
+                "discriminator": {
+                  "mapping": {
+                    "genie": "#/$defs/GenieTool",
+                    "mcp": "#/$defs/MCPTool",
+                    "python": "#/$defs/PythonFunctionTool",
+                    "uc_function": "#/$defs/UCFunctionTool",
+                    "vector_search": "#/$defs/VectorSearchTool"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/GenieTool"
+                  },
+                  {
+                    "$ref": "#/$defs/VectorSearchTool"
+                  },
+                  {
+                    "$ref": "#/$defs/UCFunctionTool"
+                  },
+                  {
+                    "$ref": "#/$defs/PythonFunctionTool"
+                  },
+                  {
+                    "$ref": "#/$defs/MCPTool"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Definitions"
+        },
+        "mcp": {
+          "$ref": "#/$defs/AgentMcpRuntime",
+          "default": {
+            "gateway": null,
+            "source": "workspace"
+          }
+        },
+        "mcp_only": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mcp Only"
+        },
+        "skills": {
+          "$ref": "#/$defs/AgentSkillsRuntime",
+          "default": {
+            "gateway": null,
+            "loading": null,
+            "repository": null,
+            "routing_header": null,
+            "source": null,
+            "unity_catalog": null,
+            "user_skills": {
+              "authoring_schema": null,
+              "enabled": null,
+              "exclude": [],
+              "include": [],
+              "locations": [],
+              "max_skill_md_chars": 20000,
+              "max_skills": 20,
+              "store": "lakebase"
+            }
+          }
+        }
+      },
+      "title": "AgentToolsRuntime",
+      "type": "object"
+    },
+    "AgentUISpec": {
+      "additionalProperties": false,
+      "description": "``spec.ui`` -- the presentation surface and its feature toggles.\n\n``enabled: false`` makes the payload headless (the API is served but\nthe bundled chat UI is not).  Each nested feature is a mount toggle.",
+      "properties": {
+        "charts": {
+          "$ref": "#/$defs/FeatureToggle",
+          "default": {
+            "enabled": true
+          }
+        },
+        "chat_history": {
+          "$ref": "#/$defs/ChatHistoryUI",
+          "default": {
+            "enabled": true,
+            "project_name": null,
+            "retention_days": 365,
+            "sidebar_days": 30
+          }
+        },
+        "chat_layout": {
+          "$ref": "#/$defs/ChatLayoutUI",
+          "default": {
+            "width": "4xl"
+          }
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "feedback": {
+          "$ref": "#/$defs/FeatureToggle",
+          "default": {
+            "enabled": true
+          }
+        },
+        "file_upload": {
+          "$ref": "#/$defs/FileUploadUI",
+          "default": {
+            "enabled": false,
+            "images": false,
+            "max_mb": 10
+          }
+        },
+        "kind": {
+          "default": "chat",
+          "title": "Kind",
+          "type": "string"
+        },
+        "resources_sidebar": {
+          "$ref": "#/$defs/ResourcesSidebarUI",
+          "default": {
+            "enabled": false
+          }
+        },
+        "speech_input": {
+          "$ref": "#/$defs/SpeechInputUI",
+          "default": {
+            "backend": "serving_invocations",
+            "enabled": false,
+            "endpoint": "",
+            "language": null,
+            "max_seconds": 300
+          }
+        },
+        "tool_output": {
+          "$ref": "#/$defs/ToolOutputUI",
+          "default": {
+            "expanded": false
+          }
+        }
+      },
+      "title": "AgentUISpec",
+      "type": "object"
+    },
+    "ChatHistoryUI": {
+      "additionalProperties": false,
+      "description": "``spec.ui.chat_history`` -- persistent chat history via Lakebase.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "project_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Name"
+        },
+        "retention_days": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 365,
+          "title": "Retention Days"
+        },
+        "sidebar_days": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 30,
+          "title": "Sidebar Days"
+        }
+      },
+      "title": "ChatHistoryUI",
+      "type": "object"
+    },
+    "ChatLayoutUI": {
+      "additionalProperties": false,
+      "description": "``spec.ui.chat_layout`` -- how wide the chat column may grow.\n\nA *behavioral mode*: the column always fills the window up to this\ncap, then stays centred.  The cap keeps assistant answers readable on\nwide monitors; ``4xl`` is 896px, ``5xl`` 1024px, ``6xl`` 1152px and\n``7xl`` 1280px.  The empty state, the message list and the composer\nshare the one value so they stay aligned.",
+      "properties": {
+        "width": {
+          "default": "4xl",
+          "enum": [
+            "4xl",
+            "5xl",
+            "6xl",
+            "7xl"
+          ],
+          "title": "Width",
+          "type": "string"
+        }
+      },
+      "title": "ChatLayoutUI",
+      "type": "object"
+    },
+    "FeatureToggle": {
+      "additionalProperties": false,
+      "description": "A plain on/off UI feature (``spec.ui.feedback`` / ``spec.ui.charts``).",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "FeatureToggle",
+      "type": "object"
+    },
+    "FileUploadUI": {
+      "additionalProperties": false,
+      "description": "``spec.ui.file_upload`` -- chat file-upload + extractor service.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "images": {
+          "default": false,
+          "title": "Images",
+          "type": "boolean"
+        },
+        "max_mb": {
+          "default": 10,
+          "title": "Max Mb",
+          "type": "integer"
+        }
+      },
+      "title": "FileUploadUI",
+      "type": "object"
+    },
+    "GatewayMcpRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.tools.mcp.gateway`` -- MCP services through Unity Gateway.",
+      "properties": {
+        "discovery": {
+          "$ref": "#/$defs/McpDiscoverySpec",
+          "default": {
+            "enabled": false,
+            "exclude": [],
+            "exclude_tools": [],
+            "include": [],
+            "limits": {
+              "max_servers": 8,
+              "max_tools": 60
+            },
+            "locations": []
+          }
+        },
+        "pinned": {
+          "items": {
+            "$ref": "#/$defs/PinnedMcp"
+          },
+          "title": "Pinned",
+          "type": "array"
+        },
+        "user_catalog": {
+          "$ref": "#/$defs/McpDiscoverySpec",
+          "default": {
+            "enabled": false,
+            "exclude": [],
+            "exclude_tools": [],
+            "include": [],
+            "limits": {
+              "max_servers": 8,
+              "max_tools": 60
+            },
+            "locations": []
+          }
+        }
+      },
+      "title": "GatewayMcpRuntime",
+      "type": "object"
+    },
+    "GatewaySkillsRuntime": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.tools.skills.gateway`` -- Unity Catalog skills.",
+      "properties": {
+        "authoring": {
+          "$ref": "#/$defs/SkillAuthoring",
+          "default": {
+            "enabled": false,
+            "max_skill_md_chars": 20000,
+            "schema": null
+          }
+        },
+        "discovery": {
+          "$ref": "#/$defs/SkillDiscoverySpec",
+          "default": {
+            "enabled": false,
+            "exclude": [],
+            "include": [],
+            "limits": {
+              "max_loaded_chars": 40000,
+              "max_skills": 20
+            },
+            "locations": []
+          }
+        },
+        "pinned": {
+          "items": {
+            "$ref": "#/$defs/PinnedSkill"
+          },
+          "title": "Pinned",
+          "type": "array"
+        },
+        "refresh_seconds": {
+          "default": 900,
+          "minimum": 0,
+          "title": "Refresh Seconds",
+          "type": "integer"
+        },
+        "user_catalog": {
+          "$ref": "#/$defs/SkillDiscoverySpec",
+          "default": {
+            "enabled": false,
+            "exclude": [],
+            "include": [],
+            "limits": {
+              "max_loaded_chars": 40000,
+              "max_skills": 20
+            },
+            "locations": []
+          }
+        }
+      },
+      "title": "GatewaySkillsRuntime",
+      "type": "object"
+    },
+    "GenieTool": {
+      "description": "A Genie space tool. ``space_id`` is injected by the assembler.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "space_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Space Id"
+        },
+        "type": {
+          "const": "genie",
+          "default": "genie",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "title": "GenieTool",
+      "type": "object"
+    },
+    "MCPServerIntegration": {
+      "additionalProperties": false,
+      "description": "``spec.integrations.mcp_server`` -- expose the agent AS an MCP server.\n\nThe exposure half of MCP (mounting ``/mcp`` for other systems to\nconsume), mirroring ``a2a``.  The *consumption* half (the agent\nusing external MCP servers as tools) is presence-based via the\n``mcp_servers/`` directory and has no toggle here.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "MCPServerIntegration",
+      "type": "object"
+    },
+    "MCPTool": {
+      "description": "A reference to a tool exposed by a registered MCP server.\n\nCarries only ``name`` + ``description``. The skills validator\nresolves the name at validate-time against the union of allow-lists\ndeclared in ``instances/<app>/payloads/agent/mcp_servers/<name>/server.yml``;\nunresolved names are a validation error with a \"did you forget to\nregister the MCP server?\" hint.\n\nYAML entries that omit ``type:`` entirely are normalised to\n``type: mcp`` by the assembler / validator before this model sees\nthem, so authors can write the minimal shape::\n\n    tools:\n      - name: search_issues\n        description: \"...\"",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "const": "mcp",
+          "default": "mcp",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "title": "MCPTool",
+      "type": "object"
+    },
+    "McpDiscoverySpec": {
+      "additionalProperties": false,
+      "description": "``mcp.gateway.discovery`` / ``mcp.gateway.user_catalog``.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "exclude": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exclude",
+          "type": "array"
+        },
+        "exclude_tools": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exclude Tools",
+          "type": "array"
+        },
+        "include": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Include",
+          "type": "array"
+        },
+        "limits": {
+          "$ref": "#/$defs/McpLimits",
+          "default": {
+            "max_servers": 8,
+            "max_tools": 60
+          }
+        },
+        "locations": {
+          "items": {
+            "pattern": "^(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*\\.(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*$",
+            "type": "string"
+          },
+          "title": "Locations",
+          "type": "array"
+        }
+      },
+      "title": "McpDiscoverySpec",
+      "type": "object"
+    },
+    "McpLimits": {
+      "additionalProperties": false,
+      "description": "Upper bounds for one MCP discovery block.",
+      "properties": {
+        "max_servers": {
+          "default": 8,
+          "minimum": 1,
+          "title": "Max Servers",
+          "type": "integer"
+        },
+        "max_tools": {
+          "default": 60,
+          "minimum": 1,
+          "title": "Max Tools",
+          "type": "integer"
+        }
+      },
+      "title": "McpLimits",
+      "type": "object"
+    },
+    "ModelServiceModel": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.model`` with ``kind: model_service`` (Unity Gateway).",
+      "properties": {
+        "kind": {
+          "const": "model_service",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*\\.[A-Za-z0-9_][A-Za-z0-9_-]*\\.[A-Za-z0-9_][A-Za-z0-9_-]*$",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "title": "ModelServiceModel",
+      "type": "object"
+    },
+    "PinnedMcp": {
+      "additionalProperties": false,
+      "description": "A gateway MCP service the agent always mounts (locked in the UI).",
+      "properties": {
+        "fqn": {
+          "pattern": "^(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*\\.(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*\\.(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*$",
+          "title": "Fqn",
+          "type": "string"
+        },
+        "identity": {
+          "enum": [
+            "obo",
+            "sp"
+          ],
+          "title": "Identity",
+          "type": "string"
+        },
+        "tools": {
+          "$ref": "#/$defs/PinnedToolFilter",
+          "default": {
+            "allow": []
+          }
+        }
+      },
+      "required": [
+        "fqn",
+        "identity"
+      ],
+      "title": "PinnedMcp",
+      "type": "object"
+    },
+    "PinnedSkill": {
+      "additionalProperties": false,
+      "description": "A Unity Catalog skill the agent always loads (locked in the UI).",
+      "properties": {
+        "fqn": {
+          "pattern": "^(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*\\.(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*\\.(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*$",
+          "title": "Fqn",
+          "type": "string"
+        },
+        "identity": {
+          "enum": [
+            "obo",
+            "sp"
+          ],
+          "title": "Identity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fqn",
+        "identity"
+      ],
+      "title": "PinnedSkill",
+      "type": "object"
+    },
+    "PinnedToolFilter": {
+      "additionalProperties": false,
+      "description": "``pinned[].tools`` -- narrows a pinned MCP service's tools.\n\nApplied on top of the service's governed tool selection.  An empty\n``allow`` leaves the service in charge; it does not mean \"no tools\".",
+      "properties": {
+        "allow": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allow",
+          "type": "array"
+        }
+      },
+      "title": "PinnedToolFilter",
+      "type": "object"
+    },
+    "PythonFunctionTool": {
+      "description": "A plain in-process Python callable, invoked directly by the agent\nruntime (no MCP / Genie / Vector Search / UC transport).\n\nThis is an **instance-author primitive**, not a skill-catalog or\nend-user primitive: ``callable_path`` is config authored in the\ninstance repo and is never derived from chat input, end users, or a\nshared skill catalog.\n\n``callable_path`` is a dotted import path to a module-level callable,\ne.g. ``\"my_pkg.my_module.my_func\"``, and must resolve to instance code\nunder ``instances/<name>/`` (the only tree the deploy staging ships\nalongside the framework wheel).  The runtime enforces this fail-closed\nat load: a path to an installed or stdlib module, or a callable\nre-exported from one, is rejected and the tool is skipped.\n\nKeep the callable to in-memory compute and route I/O (SQL, network,\nUC) through an MCP server.  The load check guarantees only\ninstance-authored code runs; ambient I/O inside that code is not\nblocked in-process and is part of the instance-author contract.\n\nA leading parameter named ``state`` receives the request-scoped\n``RequestState`` (the only supported per-request accumulator) and is\nnot exposed as an LLM argument.\n\n``params_json_schema`` is the JSON Schema for the tool's arguments.\nWhen omitted, the runtime infers a primitives-only schema from the\ncallable's signature (see\n``payloads.agent.runtime.tools._infer_params_schema``); pass an\nexplicit schema (e.g. from a Pydantic model's ``model_json_schema()``)\nfor anything richer than ``str`` / ``int`` / ``float`` / ``bool`` args.\n\nUnlike the MCP-served tool types, this is a *direct-mode* tool that\nstays in ``SKILL_TOOLS`` and is attached by the runtime regardless of\nthe ``mcp_only`` flag (it is first-party in-process code, not the\nlegacy direct-mode Genie / Vector Search that flag gates).",
+      "properties": {
+        "callable_path": {
+          "title": "Callable Path",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "params_json_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Params Json Schema"
+        },
+        "type": {
+          "const": "python",
+          "default": "python",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "callable_path"
+      ],
+      "title": "PythonFunctionTool",
+      "type": "object"
+    },
+    "RepositorySkills": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.tools.skills.repository`` -- the payload's ``skills/`` folder.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "RepositorySkills",
+      "type": "object"
+    },
+    "ResourcesSidebarUI": {
+      "additionalProperties": false,
+      "description": "``spec.ui.resources_sidebar`` -- the chat's resources panel.\n\nOff by default.  Lists the agent's MCPs and skills; users can add from\ntheir own catalog only where a gateway ``user_catalog`` is enabled.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "ResourcesSidebarUI",
+      "type": "object"
+    },
+    "ServingEndpointModel": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.model`` with ``kind: serving_endpoint``.",
+      "properties": {
+        "kind": {
+          "const": "serving_endpoint",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "title": "ServingEndpointModel",
+      "type": "object"
+    },
+    "SkillAuthoring": {
+      "additionalProperties": false,
+      "description": "``skills.gateway.authoring`` -- users creating skills from the UI.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "max_skill_md_chars": {
+          "default": 20000,
+          "minimum": 1,
+          "title": "Max Skill Md Chars",
+          "type": "integer"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "pattern": "^(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*\\.(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema"
+        }
+      },
+      "title": "SkillAuthoring",
+      "type": "object"
+    },
+    "SkillDiscoverySpec": {
+      "additionalProperties": false,
+      "description": "``skills.gateway.discovery`` / ``skills.gateway.user_catalog``.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "exclude": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exclude",
+          "type": "array"
+        },
+        "include": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Include",
+          "type": "array"
+        },
+        "limits": {
+          "$ref": "#/$defs/SkillLimits",
+          "default": {
+            "max_loaded_chars": 40000,
+            "max_skills": 20
+          }
+        },
+        "locations": {
+          "items": {
+            "pattern": "^(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*\\.(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*$",
+            "type": "string"
+          },
+          "title": "Locations",
+          "type": "array"
+        }
+      },
+      "title": "SkillDiscoverySpec",
+      "type": "object"
+    },
+    "SkillLimits": {
+      "additionalProperties": false,
+      "description": "Upper bounds for one skill discovery block.",
+      "properties": {
+        "max_loaded_chars": {
+          "default": 40000,
+          "minimum": 1,
+          "title": "Max Loaded Chars",
+          "type": "integer"
+        },
+        "max_skills": {
+          "default": 20,
+          "minimum": 1,
+          "title": "Max Skills",
+          "type": "integer"
+        }
+      },
+      "title": "SkillLimits",
+      "type": "object"
+    },
+    "SpeechInputUI": {
+      "additionalProperties": false,
+      "description": "``spec.ui.speech_input`` -- the composer mic button (speech to text).\n\nOff by default.  The recording is transcribed by ``endpoint`` and the\ntext lands in the composer for review; nothing is sent automatically.\n``language`` is an optional hint such as ``de``; unset, the browser\nlanguage is the hint and the model still auto-detects.",
+      "properties": {
+        "backend": {
+          "const": "serving_invocations",
+          "default": "serving_invocations",
+          "title": "Backend",
+          "type": "string"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "endpoint": {
+          "default": "",
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "max_seconds": {
+          "default": 300,
+          "maximum": 300,
+          "minimum": 1,
+          "title": "Max Seconds",
+          "type": "integer"
+        }
+      },
+      "title": "SpeechInputUI",
+      "type": "object"
+    },
+    "ToolOutputUI": {
+      "additionalProperties": false,
+      "description": "``spec.ui.tool_output`` -- how tool-call panels render in the chat.\n\nA *behavioral mode* rather than a mount toggle: the panels are always\npresent, and this only decides whether each one starts expanded.\n\nCollapsed by default because a turn with several tool calls otherwise\npushes the actual answer off-screen behind raw parameter / result\ndumps.  Either way the panel header stays clickable, so a user can\nopen any individual call to inspect it.",
+      "properties": {
+        "expanded": {
+          "default": false,
+          "title": "Expanded",
+          "type": "boolean"
+        }
+      },
+      "title": "ToolOutputUI",
+      "type": "object"
+    },
+    "UCFunctionTool": {
+      "description": "A Unity Catalog function tool. ``function_name`` is the fully\nqualified ``<catalog>.<schema>.<function>`` path (or a\n``${var.<x>}`` template resolved by the variable substituter).",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "function_name": {
+          "title": "Function Name",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "const": "uc_function",
+          "default": "uc_function",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "function_name"
+      ],
+      "title": "UCFunctionTool",
+      "type": "object"
+    },
+    "UnityCatalogSkills": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.tools.skills.unity_catalog`` -- the developer's Unity Catalog skills.",
+      "properties": {
+        "discovery": {
+          "$ref": "#/$defs/SkillDiscoverySpec",
+          "default": {
+            "enabled": false,
+            "exclude": [],
+            "include": [],
+            "limits": {
+              "max_loaded_chars": 40000,
+              "max_skills": 20
+            },
+            "locations": []
+          }
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "pinned": {
+          "items": {
+            "$ref": "#/$defs/PinnedSkill"
+          },
+          "title": "Pinned",
+          "type": "array"
+        },
+        "refresh_seconds": {
+          "default": 900,
+          "minimum": 0,
+          "title": "Refresh Seconds",
+          "type": "integer"
+        }
+      },
+      "title": "UnityCatalogSkills",
+      "type": "object"
+    },
+    "UserSkills": {
+      "additionalProperties": false,
+      "description": "``spec.runtime.tools.skills.user_skills`` -- skills each user adds for their own chats.\n\n``store: lakebase`` keeps them per user in the chat-history Lakebase.\n``store: unity_catalog`` lets users pick from ``locations`` and, with\n``authoring_schema``, write their own there; inside Databricks Apps\nthe user token lacks the ``unity-catalog`` scope that needs.\n\n``enabled`` is the switch.  The deprecated form sets only ``store``.",
+      "properties": {
+        "authoring_schema": {
+          "anyOf": [
+            {
+              "pattern": "^(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*\\.(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authoring Schema"
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enabled"
+        },
+        "exclude": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exclude",
+          "type": "array"
+        },
+        "include": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Include",
+          "type": "array"
+        },
+        "locations": {
+          "items": {
+            "pattern": "^(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*\\.(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_])(?:\\$\\{var\\.[A-Za-z0-9_]+\\}|[A-Za-z0-9_-])*$",
+            "type": "string"
+          },
+          "title": "Locations",
+          "type": "array"
+        },
+        "max_skill_md_chars": {
+          "default": 20000,
+          "minimum": 1,
+          "title": "Max Skill Md Chars",
+          "type": "integer"
+        },
+        "max_skills": {
+          "default": 20,
+          "minimum": 1,
+          "title": "Max Skills",
+          "type": "integer"
+        },
+        "store": {
+          "default": "lakebase",
+          "enum": [
+            "lakebase",
+            "unity_catalog"
+          ],
+          "title": "Store",
+          "type": "string"
+        }
+      },
+      "title": "UserSkills",
+      "type": "object"
+    },
+    "VectorSearchTool": {
+      "description": "A Vector Search index tool. ``index_name`` / ``endpoint_name`` are\ninjected by the assembler when omitted.",
+      "properties": {
+        "columns": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "endpoint_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpoint Name"
+        },
+        "index_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Index Name"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "num_results": {
+          "default": 10,
+          "title": "Num Results",
+          "type": "integer"
+        },
+        "query_type": {
+          "default": "HYBRID",
+          "title": "Query Type",
+          "type": "string"
+        },
+        "score_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score Threshold"
+        },
+        "type": {
+          "const": "vector_search",
+          "default": "vector_search",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "title": "VectorSearchTool",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Top-level shape of the agent ``payload.yml`` (drives the schema).",
+  "properties": {
+    "payload": {
+      "$ref": "#/$defs/AgentPayloadConfig"
+    }
+  },
+  "required": [
+    "payload"
+  ],
+  "title": "AgentPayloadFile",
+  "type": "object"
+}

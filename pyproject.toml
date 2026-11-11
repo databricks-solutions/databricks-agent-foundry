@@ -1,0 +1,646 @@
+[project]
+name = "agent-foundry"
+version = "1.4.0"
+description = "Composable building blocks for Databricks AI Agent applications"
+requires-python = ">=3.11,<3.14"
+readme = "README.md"
+license = "LicenseRef-Databricks"
+license-files = ["LICENSE", "NOTICE"]
+
+# Core dependencies shared across all workflows (deploy scripts, tests, runtime)
+dependencies = [
+    # Imported directly by the deploy CLI (agent_foundry/deploy/cli/) alongside
+    # typer. Declared explicitly rather than leaned on as a typer transitive so a
+    # clean `uvx --from ...` resolve always ships it.
+    "click>=8.1",
+    "databricks-sdk>=0.151.0",
+    # Transitive security floor: idna<3.15 is vulnerable to CVE-2026-45409
+    # (DoS via crafted input to idna.encode). Pulled in by httpx/requests/anyio/yarl.
+    # See Dependabot alert #50 / GHSA-65pc-fj4g-8rjx.
+    "idna>=3.15",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+# Runtime: what the agent process needs on Databricks Model Serving and Apps.
+# Exact App-container pins are lock-derived constraint files under
+# agent_foundry/constraints/ (copied into deploy staging). After ``uv lock``,
+# run ``python -m agent_foundry.constraints.export`` and commit the result.
+runtime = [
+    # Capped to the 0.17.x line that uv.lock resolves and the test suite runs
+    # against. The Apps deploy path installs this extra fresh in the container,
+    # so an open ceiling silently upgrades the SDK on every redeploy -- a newer
+    # build started rejecting Responses ``message`` items whose ``status`` is
+    # ``None`` and broke every multi-turn request (see ``_drop_null_status`` in
+    # payloads/agent/runtime/core.py). Raise deliberately, after testing.
+    "openai-agents>=0.13.0,<0.18",
+    # openai 2.45 made ``cache_write_tokens`` a required field on Responses
+    # ``InputTokensDetails``; openai-agents 0.17.x still emits the older
+    # ``{"cached_tokens": 0}`` shape, so 2.45+ raises a pydantic validation
+    # error on every request. Cap below 2.45 until openai-agents catches up.
+    # The Apps deploy path installs this extra fresh in the container, so an
+    # open ceiling would silently float to the broken build on redeploy.
+    "openai>=2.36.0,<2.45",
+    # Dependabot #251 (scorer SSRF). Floor 3.17.2 also clears the
+    # 3.17.1 advisory Dependabot reports as patched in 3.17.2.
+    "mlflow[databricks]>=3.17.2",
+    "databricks-agents>=1.9.0",
+    "databricks-openai>=0.13.0",
+    "databricks-ai-bridge>=0.17.0",
+    "slowapi>=0.1.9",
+    "protobuf>=5.29,<6",
+    # MCP/A2A server adapters (opt-in via ENABLE_MCP_SERVER / ENABLE_A2A env vars)
+    # Floor clears GHSA-hvrp-rf83-w775 / GHSA-jpw9-pfvf-9f58 / GHSA-vj7q-gjh5-988w
+    # (Dependabot #81-#83). 1.30.0 clears Dependabot #179 / CVE-2026-59951
+    # (unbounded StreamableHTTP session accumulation).
+    "mcp>=1.30.0",
+    # a2a-sdk 1.0 introduced AgentCard.supported_interfaces (replaces top-level
+    # ``url``) and the ``enable_v0_3_compat`` route-factory kwarg used by the
+    # A2A brick. The framework imports v1.0-only proto types, so the floor
+    # must reflect that. Capped below 2.x until the SDK announces another
+    # breaking change.
+    "a2a-sdk>=1.0,<2",
+    # Chat WebSocket relay (payloads/agent/runtime/chat_socket_proxy.py); uvicorn
+    # also needs it to accept socket upgrades at all.
+    "websockets>=16.0",
+]
+
+# Eval: evaluation and monitoring dependencies
+eval = [
+    "mlflow[databricks]>=3.17.2",
+    "databricks-connect>=16.1",
+    "nest_asyncio>=1.6.0",
+]
+
+# Dev: local development, testing, and linting
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    # Report-only coverage in the offline CI job (no threshold) -- issue #722.
+    # Run as ``coverage run -m pytest``, not pytest-cov: the agent_foundry
+    # pytest11 plugin imports ~40 project modules before pytest-cov starts.
+    "coverage>=7.6",
+    "ruff>=0.9.0",
+    # ``python -m build`` is invoked by the wheel-based App deploy helper
+    # (agent_foundry/deploy/staging.py) at deploy time -- issue #112.
+    "build>=1.2",
+    # mypy in strict mode is enforced on the public typed-return models
+    # (``agent_foundry/public/``) only -- see [tool.mypy].  Issue #159.
+    # Retrofitting strict mode on the rest of the framework is a separate
+    # piece of work and is intentionally out of scope here.
+    "mypy>=1.11",
+    # Stubs for ``yaml`` (PyYAML ships no inline annotations).  Required
+    # under strict mypy for ``agent_foundry/config.py`` -- issue #228.
+    "types-PyYAML>=6.0",
+    # Pre-commit runs ruff check + ruff format on staged files.  Mirrors
+    # the CI lint job; setup is documented in docs/tutorials/getting-started.md.
+    # Issue #201, epic #224.
+    "pre-commit>=3.7",
+]
+
+# Extraction: file-upload parsers for the chat extractor service, opt-in
+# via ``[file_upload] enabled = true``.  Kept out of core + runtime so the
+# agent process never carries these heavy, untrusted-input-facing libs;
+# only the isolated extractor process (D6) installs this extra.
+extraction = [
+    # parsers (lazily imported by payloads.agent.runtime.extraction.parsers)
+    "openpyxl>=3.1",
+    "python-docx>=1.1",
+    # Dependabot #122-#123, #134-#136, #138, #165-#172 (PDF parse DoS / memory)
+    # GHSA-qfv9-64jg-mh7p / GHSA-9mx8-4j7g-633p / GHSA-39mj-jf6j-2qj3 /
+    # GHSA-7mh2-4gg2-979f. Dependabot #267-#273 (xref/trailer loops, page
+    # tree / cross-reference stream memory, dict-clone loop). Floor 6.21.4.
+    "pypdf>=6.21.4",
+    # XXE / billion-laughs hardening for the stdlib XML path (openpyxl)
+    "defusedxml>=0.7",
+    # the isolated extractor HTTP service (payloads/agent/runtime/extractor_service.py)
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    # Floor clears GHSA-5rvq-cxj2-64vf / GHSA-vffw-93wf-4j4q /
+    # GHSA-6jv3-5f52-599m / GHSA-v9pg-7xvm-68hf (Dependabot #59-#62).
+    "python-multipart>=0.0.31",
+]
+
+# Call: programmatic A2A / MCP callers (agent-foundry call ...)
+call = [
+    "databricks-sdk>=0.151.0",
+    "databricks-mcp>=0.3.0",
+    "a2a-sdk>=1.0,<2",
+    "httpx>=0.27",
+]
+
+# rest_mcp: the lean REST->MCP proxy App payload (issue #326).  Deliberately
+# minimal -- no agent runtime / MLflow / Lakebase -- so the proxy container
+# stays small: just the FastMCP/low-level MCP server (``mcp``), the ASGI
+# server (``uvicorn``), and the upstream HTTP client (``httpx``).  The
+# Databricks SDK (secret resolution) is a core dependency.
+rest_mcp = [
+    "mcp>=1.30.0",
+    "uvicorn>=0.29",
+    "httpx>=0.27",
+]
+
+# All: install everything (runtime + eval + dev + call + extraction + rest_mcp)
+all = [
+    "agent-foundry[runtime,eval,dev,call,extraction,rest_mcp]",
+]
+
+[project.scripts]
+# Issue #81 (68-A): public CLI for the deploy orchestrator so a
+# downstream repo with only `instances/` can install the wheel and run
+# `agent-foundry deploy --instance my-app --target dev`.
+agent-foundry = "agent_foundry.deploy.cli:main"
+
+[project.entry-points.pytest11]
+# Issue #434: consumers that ``agent-foundry init`` pins get the
+# ``--run-live`` / ``--run-component`` / ``--run-gone`` flags,
+# markers and collection skip without scaffolding a repo-root conftest.py.
+# Do not also declare those options in a local conftest -- pytest rejects
+# duplicates.
+agent_foundry = "agent_foundry.pytest_plugin"
+
+[tool.setuptools.packages.find]
+# Non-package top-level dirs (``instances/``, ``conf/``, ``scripts/``,
+# ``docs/``, ``tests/``) have no ``__init__.py`` and are therefore
+# already skipped by ``find``.  We keep a narrow include list for
+# explicitness and to guard against future ``__init__.py`` churn --
+# issue #81, 68-A.
+#
+# ``examples*`` carries the named-composition trees consumed by
+# ``agent-foundry init`` (see ``examples/__init__.py``).  Each variant
+# subdir gets an ``__init__.py`` so ``importlib.resources`` can
+# discover it in both source checkouts and wheel installs.
+include = ["agent_foundry*", "bricks*", "payloads*", "examples*"]
+# Keep test subpackages (``agent_foundry.tests``, ``bricks.*.tests``) out of
+# the built wheel -- they are developed alongside the framework but are not
+# part of the public API shipped to downstream consumers.
+exclude = ["*.tests", "*.tests.*", "tests", "tests.*"]
+
+[tool.setuptools]
+# Ship brick-level YAML/JSON templates and defaults as package data so
+# brick scripts can load them via ``importlib.resources`` when the
+# framework is installed as a wheel (issue #81, 68-A).  The concrete
+# globs are declared in MANIFEST.in.
+include-package-data = true
+
+[tool.setuptools.package-data]
+# Explicit package-data for the chat-UI overrides tree -- issue #112.
+# The agent chat UI lives at ``payloads/agent/ui/overrides/`` (moved
+# under the payload's ``ui/`` container in #338).  It has no
+# ``__init__.py`` (it is a TS/React tree, not a Python package), so
+# MANIFEST.in alone is brittle: setuptools only ships those files when
+# ``include-package-data`` AND the parent package is discovered AND the
+# subdirectory walk happens to work.  An earlier dist wheel shipped only
+# ``overrides/MANIFEST.md`` and silently dropped every ``.ts``/``.tsx``
+# -- this would strip the entire customised chat UI from wheel-installed
+# App deploys (the chat UI would silently fall back to the upstream
+# template).  Belt-and-braces: keep MANIFEST.in and pin the contract
+# here too.  Scoped to ``ui/overrides/`` so the out-of-tree TS unit
+# tests under ``ui/tests/`` stay out of the wheel / overlay.
+"payloads.agent" = ["ui/overrides/**/*", "deploy/speech/_scaffold/*", "smoke_data/*.m4a"]
+# JSON Schemas generated from the typed config models (#191, F-PR3).
+# Downstream repos consume these via ``agent-foundry sync-schemas``;
+# the wheel must carry them as package data so wheel-installed
+# downstreams see the bundle without a source checkout.
+"agent_foundry.schemas" = ["*.schema.json"]
+# Lock-derived pip constraints for Databricks App installs. Staging copies
+# these next to the generated requirements.txt (``-c constraints-<extra>.txt``).
+"agent_foundry.constraints" = ["*.txt"]
+"agent_foundry.testing" = ["*.toml", "fixtures/**/*"]
+# Named end-to-end app variants for ``agent-foundry init`` (#210).
+# One parent-package pin covers every ``examples/<variant>/`` subdir;
+# new variants only need ``__init__.py`` + ``manifest.toml`` (no
+# per-variant line here).  Globs are asserted in
+# ``tests/contracts/test_examples_packaging.py`` against
+# ``agent_foundry.packaging.examples_variants.EXAMPLES_PACKAGE_DATA_GLOBS``.
+"examples" = ["**/*.yml", "**/*.yaml", "**/*.json", "**/*.md", "**/*.sql", "**/*.toml", "**/*.txt", "**/*.py", "*/assets/*.png", "*/assets/*.svg"]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "agent_foundry/tests",
+    "bricks",
+    "payloads",
+    "tests/contracts",
+    "tests/component",
+]
+# Markers (live / gone / component) are registered by agent_foundry.pytest_plugin.
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+# databricks-connect's bundled pyspark; MLflow imports it when the tracer probes for a Spark session.
+filterwarnings = ["ignore:distutils Version classes are deprecated:DeprecationWarning:pyspark"]
+# Use importlib so brick tests with shared basenames (e.g. test_assemble.py
+# in bricks/genie/tests/unit and payloads/agent/tests/unit/deploy/skills)
+# don't collide during collection.
+addopts = "--import-mode=importlib"
+
+[tool.coverage.run]
+source = ["agent_foundry", "bricks", "payloads"]
+omit = ["*/tests/*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+# ``examples/`` variant trees are copied byte-for-byte into generated
+# repos at init time; linting them here would force their style to
+# track the framework's instead of the downstream's.
+extend-exclude = ["examples"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+# Mypy is configured in three layers:
+#
+# 1. ``mypy`` (no args): runs strict mode on the public surface
+#    (``agent_foundry/public/``) only.  Issue #159.  This is what
+#    blocks CI today via the ``Type check (strict)`` job.
+# 2. ``mypy <path>`` (explicit path arg): runs the *filtered* gate
+#    on the named directory -- disables the bulk style codes
+#    (``no-untyped-def``, ``type-arg``, ...) so only bug-shaped
+#    errors block.  Issue #227.  Currently gated paths:
+#    ``agent_foundry/`` (PR-A2), top-level ``tests/`` (PR-B),
+#    and ``bricks/`` (PR-C series, #238).
+# 3. Per-module ``[[tool.mypy.overrides]]`` blocks with ``strict = true``
+#    promote modules out of the filtered gate into full strict mode.
+#    Tracked under epic #225 (Type the framework brick-by-brick).
+#    Currently strict: ``agent_foundry.public.*`` (#159), the
+#    ``agent_foundry/`` core (#228 -- deploy, loader, config, state,
+#    bricks, env), the ``agent_foundry/`` peripherals (#229 -- cli,
+#    contracts, init excluding ``examples/``), the integration /
+#    ops bricks (#232 -- evaluation, observability), the
+#    data + retrieval bricks (#231 -- data, genie, sql_function,
+#    vector_search, warehouse), and the agent-stack bricks (#230 --
+#    agent_app, tracing, and the agent payload).  Every framework
+#    module is now strict; the filtered ``bricks/`` gate from #238 can
+#    be retired in a follow-up.
+#
+# To run locally::
+#
+#     mypy                         # strict, public surface + #228 + #229 + #230 + #231 + #232
+#     mypy agent_foundry/          # filtered, agent_foundry/
+#     mypy tests/                  # filtered, top-level tests/
+#     mypy bricks/                 # filtered, bricks/ (incl. inline tests)
+[tool.mypy]
+python_version = "3.11"
+# Strict-mode entry points for bare ``mypy`` (no path arg).  Covers the
+# public surface (#159), the ``agent_foundry/`` core (#228), the
+# author-facing peripherals (#229), the integration / ops bricks (#232),
+# the data + retrieval bricks (#231), and the agent-stack bricks (#230).
+# Each path is also held to ``strict = true`` via an explicit override
+# below.
+files = [
+    "agent_foundry/public",
+    "agent_foundry/deploy",
+    "agent_foundry/loader.py",
+    "agent_foundry/config.py",
+    "agent_foundry/state.py",
+    "agent_foundry/bricks.py",
+    "agent_foundry/env.py",
+    "agent_foundry/cli",
+    "agent_foundry/contracts",
+    "agent_foundry/init",
+    "agent_foundry/testing",
+    "bricks/ai_gateway",
+    "bricks/evaluation",
+    "bricks/observability",
+    "bricks/data",
+    "bricks/genie",
+    "bricks/sql_function",
+    "bricks/vector_search",
+    "bricks/model_serving",
+    "bricks/warehouse",
+    "bricks/app",
+    "bricks/tracing",
+    "payloads/agent",
+    "payloads/rest_mcp",
+]
+# Walk imports outside the listed strict paths silently -- the
+# framework-wide filtered gate (#227) is responsible for the rest of
+# the codebase.  Per-module overrides re-enable strict.
+follow_imports = "silent"
+# ``examples/`` ships byte-for-byte variant trees consumed by
+# ``agent-foundry init``.  Linting / typing them here would force
+# their style to track the framework's instead of the downstream's;
+# the canonical sample repo runs its own gates.  Mirrors the
+# ``[tool.ruff].extend-exclude`` setting.  Issue #229.
+exclude = ["examples/"]
+# Pydantic models need the plugin for proper typing of model_validate /
+# model_dump and field default handling.
+plugins = ["pydantic.mypy"]
+# Codes disabled on the framework-wide (filtered) gate.  The strict
+# override below re-enables them for ``agent_foundry.public.*`` so the
+# public-surface contract stays tight.  Issue #227.
+disable_error_code = [
+    "no-untyped-def",
+    "type-arg",
+    "no-any-return",
+    "import-untyped",
+    "prop-decorator",
+    "unused-ignore",
+    "misc",
+]
+
+[[tool.mypy.overrides]]
+module = "agent_foundry.public.*"
+strict = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+# Re-enable the codes the framework-wide gate disables; the public
+# surface is held to the strict bar.
+enable_error_code = [
+    "no-untyped-def",
+    "type-arg",
+    "no-any-return",
+    "import-untyped",
+    "prop-decorator",
+    "unused-ignore",
+    "misc",
+]
+
+# #228 (4.1 of epic #225): the central ``agent_foundry/`` core --
+# orchestrator, loader, config, state, bricks, env.  Held to the same
+# bar as the public surface so the framework's most-imported modules
+# stop leaking ``Any`` into downstream bricks.
+[[tool.mypy.overrides]]
+module = [
+    "agent_foundry.deploy.*",
+    "agent_foundry.loader",
+    "agent_foundry.config",
+    "agent_foundry.state",
+    "agent_foundry.bricks",
+    "agent_foundry.env",
+]
+strict = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+enable_error_code = [
+    "no-untyped-def",
+    "type-arg",
+    "no-any-return",
+    "import-untyped",
+    "prop-decorator",
+    "unused-ignore",
+    "misc",
+]
+
+# #229 (4.2 of epic #225): the author-facing peripherals -- typer CLI,
+# foundry.toml contracts, and the ``init`` wizard.  The ``examples/``
+# variant trees are excluded at the top-level ``[tool.mypy].exclude``
+# since they are byte-for-byte copies of downstream repos.
+[[tool.mypy.overrides]]
+module = [
+    "agent_foundry.cli.*",
+    "agent_foundry.contracts.*",
+    "agent_foundry.init.*",
+    "agent_foundry.testing.*",
+]
+strict = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+enable_error_code = [
+    "no-untyped-def",
+    "type-arg",
+    "no-any-return",
+    "import-untyped",
+    "prop-decorator",
+    "unused-ignore",
+    "misc",
+]
+
+# #232 (4.5 of epic #225): the ops bricks -- evals + observability.
+# (MCP + skills moved to the agent payload in #338; they are typed via
+# the ``payloads.agent.*`` override.)  After this lands
+# every framework module is under ``strict = true`` and the filtered
+# ``bricks/`` gate from #238 can be retired in a follow-up in favour of
+# the strict gate.
+[[tool.mypy.overrides]]
+module = [
+    "bricks.evaluation.*",
+    "bricks.observability.*",
+]
+strict = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+enable_error_code = [
+    "no-untyped-def",
+    "type-arg",
+    "no-any-return",
+    "import-untyped",
+    "prop-decorator",
+    "unused-ignore",
+    "misc",
+]
+
+# #231 (4.3 of epic #225): the data + retrieval bricks -- Unity Catalog
+# / SQL Warehouse surface (data, genie, sql_function, vector_search,
+# warehouse).  Grouped because they share UC and warehouse types
+# (catalog/schema/table refs, warehouse IDs, query results).
+[[tool.mypy.overrides]]
+module = [
+    "bricks.ai_gateway.*",
+    "bricks.data.*",
+    "bricks.genie.*",
+    "bricks.sql_function.*",
+    "bricks.vector_search.*",
+    "bricks.model_serving.*",
+    "bricks.warehouse.*",
+]
+strict = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+enable_error_code = [
+    "no-untyped-def",
+    "type-arg",
+    "no-any-return",
+    "import-untyped",
+    "prop-decorator",
+    "unused-ignore",
+    "misc",
+]
+
+# #230 (4.4 of epic #225): the agent-stack bricks -- the runtime
+# agent, its app shell, and the deploy + serving wiring.  These four
+# bricks share types (tool union, agent state, app/serving config);
+# typing them together prevents cross-brick ``Any`` leakage.
+[[tool.mypy.overrides]]
+module = [
+    "bricks.app.*",
+    "bricks.tracing.*",
+    "payloads.agent.*",
+]
+strict = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+enable_error_code = [
+    "no-untyped-def",
+    "type-arg",
+    "no-any-return",
+    "import-untyped",
+    "prop-decorator",
+    "unused-ignore",
+    "misc",
+]
+
+# #326: the ``rest_mcp`` payload -- a config-driven REST->MCP proxy.  Held to
+# the same strict bar as the other payloads from its first slice so the typed
+# ``spec`` contract stays tight.
+[[tool.mypy.overrides]]
+module = [
+    "payloads.rest_mcp.*",
+]
+strict = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+enable_error_code = [
+    "no-untyped-def",
+    "type-arg",
+    "no-any-return",
+    "import-untyped",
+    "prop-decorator",
+    "unused-ignore",
+    "misc",
+]
+
+# Third-party deps without ``py.typed`` markers.  Restated here so the
+# strict gates above don't fail with ``import-untyped`` on imports the
+# framework cannot fix upstream.  Issue #229.
+#   * ``databricks-mcp`` -- internal SDK, not yet shipping inline types.
+#   * ``pandas`` / ``nest_asyncio`` -- transitive deps of the evaluation
+#     runner; stubs are optional (``types-pandas``) but heavy and add
+#     little value for the narrow surface we touch.  Issue #232.
+#   * ``databricks_ai_bridge`` / ``databricks_openai`` -- Databricks
+#     integration SDKs used by the agent payload runtime
+#     (``payloads/agent/runtime``); no inline types upstream.  Issue #230.
+#   * ``openpyxl`` / ``docx`` / ``pypdf`` / ``defusedxml`` -- the optional
+#     ``[extraction]`` parser libs, imported lazily by the agent payload's
+#     isolated extractor (``payloads/agent/runtime/extraction``); no inline
+#     types upstream.  Issue #338.
+[[tool.mypy.overrides]]
+module = [
+    "databricks_mcp",
+    "databricks_mcp.*",
+    "pandas",
+    "nest_asyncio",
+    "databricks_ai_bridge",
+    "databricks_ai_bridge.*",
+    "databricks_openai",
+    "databricks_openai.*",
+    "openpyxl",
+    "openpyxl.*",
+    "docx",
+    "docx.*",
+    "pypdf",
+    "pypdf.*",
+    "defusedxml",
+    "defusedxml.*",
+    # Speech model build (payloads/agent/deploy/speech/_scaffold): serverless job deps only.
+    "ctranslate2",
+    "faster_whisper",
+    "huggingface_hub",
+]
+ignore_missing_imports = true
+
+[tool.uv]
+# Force-resolve transitive deps to versions that clear advisories flagged by
+# downstream supply-chain scanners. Each override has a single concrete CVE
+# / GHSA (or a tightly related advisory batch for the same package).
+override-dependencies = [
+    # Dependabot #59-#62 (DoS / parameter-smuggling in multipart parsing)
+    "python-multipart>=0.0.31",
+    # CVE-2026-44307 plus Dependabot #177 / CVE-2026-102991 (Windows
+    # TemplateLookup traversal, including drive-letter URIs). Floor 1.4.2.
+    "mako>=1.4.2",
+    # Dependabot #104-#121, #139-#143 (clone/archive option injection, config RCE).
+    # Floor must be 3.1.59: 3.1.58 still has GHSA-284h-m62q-gf8w (critical).
+    # Dependabot #237 (submodule ".git" path checked after clone, RCE). Floor 3.2.1.
+    "gitpython>=3.2.1",
+    # Dependabot #235-#236 (parser / validation DoS). Transitive via mlflow -> graphene.
+    # Capped at graphene's own <3.3: an override drops that bound, and the App's
+    # pip install still enforces it against the exported constraints.
+    "graphql-core>=3.2.12,<3.3",
+    # Dependabot #234 (unbounded tracestate parsing). Transitive via mlflow-skinny.
+    "opentelemetry-api>=1.45.1",
+    # Dependabot #261 (emSign roots with compromised intermediate keys).
+    "certifi>=2026.10.18",
+    # Dependabot #250, #259-#260 (ReadWriteLock / SoftFileLock on shared hosts).
+    # Transitive via pre-commit -> virtualenv (dev extra only).
+    "filelock>=4.2.1",
+    # Dependabot #145 / CVE-2026-63374 (TLS cert spoof via IDNA 2003 encoding)
+    # and #144 (process-pool stderr hang). Transitive via httpx/starlette.
+    "anyio>=4.14.2",
+    # CVE-2026-44843 (unsafe deserialization via overly broad load() allowlists)
+    "langchain-core>=1.3.3",
+    # CVE-2026-21441 / CVE-2026-44431 plus Dependabot #157-#159 (proxy TLS,
+    # unbounded chunk buffer, Deflate loop). Floor 2.8.0.
+    "urllib3>=2.8.0",
+    # Dependabot #79 (LangSmith TracingMiddleware arbitrary server-side file read).
+    # Transitive via mlflow-tracing -> mlflow; restating the floor here lets
+    # the override propagate when downstream pyproject.toml mirrors this block.
+    "langsmith>=0.8.18",
+    # Dependabot #84-#96 (heap OOB / decompression-bomb / DoS in image codecs)
+    # GHSA-8g5g-8vmr-9782 plus 12.3.x follow-ons. Floor 13.0.0.
+    "pillow>=13.0.0",
+    # Dependabot #98-#99 (OID / REAL DoS)
+    # Dependabot #263-#266 (quadratic BER/CER/DER, REAL, BIT STRING decoding)
+    "pyasn1>=0.6.5",
+    # Dependabot #73 (vulnerable OpenSSL bundled in cryptography wheels)
+    # Dependabot #115 / CVE-2026-69247 (PKCS#7 EnvelopedData Bleichenbacher oracle)
+    "cryptography>=50.0.0",
+    # Dependabot #54-#58, #146-#156, #160, #162 (JWK/JWT forgery, PEM/HMAC
+    # confusion, JWKS SSRF/DoS). Floor 2.15.0: 2.14.0 still has #160.
+    "pyjwt>=2.15.0",
+    # Dependabot #163-#164, #173-#174 (activator command injection, seed-wheel
+    # integrity) and #262 (unescaped --prompt in the bash activator PS1).
+    # Transitive via pre-commit (dev extra only).
+    # GHSA-vxj4-q4g9-crj7 / GHSA-5vjq-rrrf-7h2q / GHSA-c947-3pg5-gm8q /
+    # GHSA-8rjx-v5ww-45pp. Floor 21.14.13.
+    "virtualenv>=21.14.13",
+    # Dependabot #51-#52, #64-#72 (CRLF / cookie / redirect / parser issues)
+    # Dependabot #114 / CVE-2026-69244 (C HTTP parser heap OOB on malformed chunked)
+    # Dependabot #180-#182 (shared-cookie Secure, no header timeout, memory/CPU DoS)
+    "aiohttp>=3.14.4",
+    # Dependabot #53, #74-#77 (Host validation, SSRF, form-limit DoS).
+    # FastAPI 0.136 declares starlette>=0.46.0 with no upper bound, so 1.3.x
+    # is an allowed resolution; pin the floor here to clear the advisories.
+    "starlette>=1.3.1",
+    # Dependabot #80 (NestedSecretsSettingsSource symlink escape)
+    "pydantic-settings>=2.14.2",
+    # Dependabot #97 (MANIFEST.in exclusion bypass via Unicode normalization)
+    # Dependabot #247 (Windows path escape via namespace_packages.txt)
+    "setuptools>=84.1.0",
+    # Dependabot #127-#130, #137 (sqlparse ReDoS / quadratic DoS / snippet breakout)
+    "sqlparse>=0.6.0",
+    # Dependabot #175 / CVE-2026-104851 (SSTI RCE in ReferenceFileSystem)
+    "fsspec>=2026.6.0",
+    # Dependabot #176 / CVE-2026-104874 (items-view reference leak).
+    # Cap below 7: the advisory is patched in 6.9.1; 7.x is an unrelated major.
+    "multidict>=6.9.1,<7",
+    # Dependabot #178 / CVE-2026-102598 (safe_join Windows device-name hang)
+    "werkzeug>=3.1.9",
+]
+
+[build-system]
+requires = ["setuptools>=83.0.0"]
+build-backend = "setuptools.build_meta"

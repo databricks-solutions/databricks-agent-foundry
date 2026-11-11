@@ -1,0 +1,1493 @@
+{
+  "$defs": {
+    "ContinuousConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "pause_status": {
+          "default": "UNPAUSED",
+          "enum": [
+            "PAUSED",
+            "UNPAUSED"
+          ],
+          "title": "Pause Status",
+          "type": "string"
+        }
+      },
+      "title": "ContinuousConfig",
+      "type": "object"
+    },
+    "EmailNotificationsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "no_alert_for_skipped_runs": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "No Alert For Skipped Runs"
+        },
+        "on_duration_warning_threshold_exceeded": {
+          "items": {
+            "type": "string"
+          },
+          "title": "On Duration Warning Threshold Exceeded",
+          "type": "array"
+        },
+        "on_failure": {
+          "items": {
+            "type": "string"
+          },
+          "title": "On Failure",
+          "type": "array"
+        },
+        "on_start": {
+          "items": {
+            "type": "string"
+          },
+          "title": "On Start",
+          "type": "array"
+        },
+        "on_streaming_backlog_exceeded": {
+          "items": {
+            "type": "string"
+          },
+          "title": "On Streaming Backlog Exceeded",
+          "type": "array"
+        },
+        "on_success": {
+          "items": {
+            "type": "string"
+          },
+          "title": "On Success",
+          "type": "array"
+        }
+      },
+      "title": "EmailNotificationsConfig",
+      "type": "object"
+    },
+    "FileArrivalConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "min_time_between_triggers_seconds": {
+          "anyOf": [
+            {
+              "minimum": 60,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Time Between Triggers Seconds"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "wait_after_last_change_seconds": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 60,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wait After Last Change Seconds"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "title": "FileArrivalConfig",
+      "type": "object"
+    },
+    "ForEachTaskConfig": {
+      "additionalProperties": false,
+      "description": "Fan-out body of a ``for_each_task``.\n\nTyped rather than a passthrough ``dict`` so the nested task is\nvalidated like a top-level one and its ``./``-relative sources are\nuploaded and path-rewritten on deploy (#406).",
+      "properties": {
+        "concurrency": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Concurrency"
+        },
+        "inputs": {
+          "title": "Inputs",
+          "type": "string"
+        },
+        "task": {
+          "$ref": "#/$defs/JobTaskConfig"
+        }
+      },
+      "required": [
+        "inputs",
+        "task"
+      ],
+      "title": "ForEachTaskConfig",
+      "type": "object"
+    },
+    "GitSourceConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "git_branch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Git Branch"
+        },
+        "git_commit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Git Commit"
+        },
+        "git_provider": {
+          "title": "Git Provider",
+          "type": "string"
+        },
+        "git_tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Git Tag"
+        },
+        "git_url": {
+          "title": "Git Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "git_url",
+        "git_provider"
+      ],
+      "title": "GitSourceConfig",
+      "type": "object"
+    },
+    "HealthConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/HealthRuleConfig"
+          },
+          "title": "Rules",
+          "type": "array"
+        }
+      },
+      "title": "HealthConfig",
+      "type": "object"
+    },
+    "HealthRuleConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        },
+        "op": {
+          "title": "Op",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "metric",
+        "op",
+        "value"
+      ],
+      "title": "HealthRuleConfig",
+      "type": "object"
+    },
+    "JobClusterConfig": {
+      "additionalProperties": false,
+      "description": "Shared classic cluster definition referenced by ``job_cluster_key``.",
+      "properties": {
+        "job_cluster_key": {
+          "title": "Job Cluster Key",
+          "type": "string"
+        },
+        "new_cluster": {
+          "additionalProperties": true,
+          "title": "New Cluster",
+          "type": "object"
+        }
+      },
+      "required": [
+        "job_cluster_key",
+        "new_cluster"
+      ],
+      "title": "JobClusterConfig",
+      "type": "object"
+    },
+    "JobEnvironmentConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "environment_key": {
+          "title": "Environment Key",
+          "type": "string"
+        },
+        "spec": {
+          "additionalProperties": true,
+          "title": "Spec",
+          "type": "object"
+        }
+      },
+      "required": [
+        "environment_key"
+      ],
+      "title": "JobEnvironmentConfig",
+      "type": "object"
+    },
+    "JobParameterConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "default": "",
+          "title": "Default",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "JobParameterConfig",
+      "type": "object"
+    },
+    "JobTaskConfig": {
+      "additionalProperties": false,
+      "description": "One node in a multi-task job DAG.",
+      "properties": {
+        "condition_task": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition Task"
+        },
+        "dashboard_task": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dashboard Task"
+        },
+        "dbt_task": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dbt Task"
+        },
+        "depends_on": {
+          "items": {
+            "$ref": "#/$defs/TaskDependency"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "disabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Disabled"
+        },
+        "email_notifications": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmailNotificationsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "environment_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Environment Key"
+        },
+        "existing_cluster_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Existing Cluster Id"
+        },
+        "for_each_task": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ForEachTaskConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "health": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HealthConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "job_cluster_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Cluster Key"
+        },
+        "libraries": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Libraries",
+          "type": "array"
+        },
+        "max_retries": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Retries"
+        },
+        "min_retry_interval_millis": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Retry Interval Millis"
+        },
+        "new_cluster": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "New Cluster"
+        },
+        "notebook_task": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NotebookTaskConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "notification_settings": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NotificationSettingsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pipeline_task": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pipeline Task"
+        },
+        "python_wheel_task": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Python Wheel Task"
+        },
+        "retry_on_timeout": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retry On Timeout"
+        },
+        "run_if": {
+          "anyOf": [
+            {
+              "enum": [
+                "ALL_SUCCESS",
+                "AT_LEAST_ONE_SUCCESS",
+                "NONE_FAILED",
+                "ALL_DONE",
+                "AT_LEAST_ONE_FAILED",
+                "ALL_FAILED"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run If"
+        },
+        "run_job_task": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Job Task"
+        },
+        "spark_jar_task": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spark Jar Task"
+        },
+        "spark_python_task": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SparkPythonTaskConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "spark_submit_task": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spark Submit Task"
+        },
+        "sql_task": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SqlTaskConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "task_key": {
+          "title": "Task Key",
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout Seconds"
+        },
+        "webhook_notifications": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WebhookNotificationsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "task_key"
+      ],
+      "title": "JobTaskConfig",
+      "type": "object"
+    },
+    "NotebookTaskConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "base_parameters": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Base Parameters",
+          "type": "object"
+        },
+        "notebook_path": {
+          "title": "Notebook Path",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "enum": [
+                "WORKSPACE",
+                "GIT"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "warehouse_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Warehouse Id"
+        }
+      },
+      "required": [
+        "notebook_path"
+      ],
+      "title": "NotebookTaskConfig",
+      "type": "object"
+    },
+    "NotificationSettingsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "alert_on_last_attempt": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alert On Last Attempt"
+        },
+        "no_alert_for_canceled_runs": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "No Alert For Canceled Runs"
+        },
+        "no_alert_for_skipped_runs": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "No Alert For Skipped Runs"
+        }
+      },
+      "title": "NotificationSettingsConfig",
+      "type": "object"
+    },
+    "PeriodicTriggerConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "interval": {
+          "exclusiveMinimum": 0,
+          "title": "Interval",
+          "type": "integer"
+        },
+        "unit": {
+          "enum": [
+            "HOURS",
+            "DAYS",
+            "WEEKS"
+          ],
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "interval",
+        "unit"
+      ],
+      "title": "PeriodicTriggerConfig",
+      "type": "object"
+    },
+    "QueueConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "QueueConfig",
+      "type": "object"
+    },
+    "RunAsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "service_principal_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Service Principal Name"
+        },
+        "user_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User Name"
+        }
+      },
+      "title": "RunAsConfig",
+      "type": "object"
+    },
+    "ScheduleConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "pause_status": {
+          "default": "UNPAUSED",
+          "enum": [
+            "PAUSED",
+            "UNPAUSED"
+          ],
+          "title": "Pause Status",
+          "type": "string"
+        },
+        "quartz_cron_expression": {
+          "title": "Quartz Cron Expression",
+          "type": "string"
+        },
+        "timezone_id": {
+          "default": "UTC",
+          "title": "Timezone Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "quartz_cron_expression"
+      ],
+      "title": "ScheduleConfig",
+      "type": "object"
+    },
+    "SparkPythonTaskConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "parameters": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Parameters",
+          "type": "array"
+        },
+        "python_file": {
+          "title": "Python File",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "enum": [
+                "WORKSPACE",
+                "GIT"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "python_file"
+      ],
+      "title": "SparkPythonTaskConfig",
+      "type": "object"
+    },
+    "SqlAlertConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "alert_id": {
+          "title": "Alert Id",
+          "type": "string"
+        },
+        "pause_subscriptions": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pause Subscriptions"
+        }
+      },
+      "required": [
+        "alert_id"
+      ],
+      "title": "SqlAlertConfig",
+      "type": "object"
+    },
+    "SqlDashboardConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "custom_subject": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custom Subject"
+        },
+        "dashboard_id": {
+          "title": "Dashboard Id",
+          "type": "string"
+        },
+        "pause_subscriptions": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pause Subscriptions"
+        },
+        "subscriptions": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Subscriptions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "dashboard_id"
+      ],
+      "title": "SqlDashboardConfig",
+      "type": "object"
+    },
+    "SqlFileConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "enum": [
+                "WORKSPACE",
+                "GIT"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "SqlFileConfig",
+      "type": "object"
+    },
+    "SqlQueryConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "query_id": {
+          "title": "Query Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query_id"
+      ],
+      "title": "SqlQueryConfig",
+      "type": "object"
+    },
+    "SqlTaskConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "alert": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SqlAlertConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "dashboard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SqlDashboardConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "file": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SqlFileConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "parameters": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Parameters",
+          "type": "object"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SqlQueryConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "warehouse_id": {
+          "title": "Warehouse Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "warehouse_id"
+      ],
+      "title": "SqlTaskConfig",
+      "type": "object"
+    },
+    "TableUpdateTriggerConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "enum": [
+                "ANY_UPDATED",
+                "ALL_UPDATED"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "min_time_between_triggers_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Time Between Triggers Seconds"
+        },
+        "table_names": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Table Names",
+          "type": "array"
+        },
+        "wait_after_last_change_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wait After Last Change Seconds"
+        }
+      },
+      "required": [
+        "table_names"
+      ],
+      "title": "TableUpdateTriggerConfig",
+      "type": "object"
+    },
+    "TaskDependency": {
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome"
+        },
+        "task_key": {
+          "title": "Task Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_key"
+      ],
+      "title": "TaskDependency",
+      "type": "object"
+    },
+    "TriggerConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "file_arrival": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileArrivalConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pause_status": {
+          "default": "UNPAUSED",
+          "enum": [
+            "PAUSED",
+            "UNPAUSED"
+          ],
+          "title": "Pause Status",
+          "type": "string"
+        },
+        "periodic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PeriodicTriggerConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "table_update": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TableUpdateTriggerConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "TriggerConfig",
+      "type": "object"
+    },
+    "WebhookNotificationsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "on_duration_warning_threshold_exceeded": {
+          "items": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": "On Duration Warning Threshold Exceeded",
+          "type": "array"
+        },
+        "on_failure": {
+          "items": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": "On Failure",
+          "type": "array"
+        },
+        "on_start": {
+          "items": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": "On Start",
+          "type": "array"
+        },
+        "on_streaming_backlog_exceeded": {
+          "items": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": "On Streaming Backlog Exceeded",
+          "type": "array"
+        },
+        "on_success": {
+          "items": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": "On Success",
+          "type": "array"
+        }
+      },
+      "title": "WebhookNotificationsConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Authoring surface for ``jobs/<name>/job.yml`` (Jobs / Lakeflow Jobs API).",
+  "properties": {
+    "budget_policy_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Budget Policy Id"
+    },
+    "continuous": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContinuousConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "email_notifications": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EmailNotificationsConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "environments": {
+      "items": {
+        "$ref": "#/$defs/JobEnvironmentConfig"
+      },
+      "title": "Environments",
+      "type": "array"
+    },
+    "git_source": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GitSourceConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "health": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HealthConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "job_clusters": {
+      "items": {
+        "$ref": "#/$defs/JobClusterConfig"
+      },
+      "title": "Job Clusters",
+      "type": "array"
+    },
+    "max_concurrent_runs": {
+      "default": 1,
+      "exclusiveMinimum": 0,
+      "title": "Max Concurrent Runs",
+      "type": "integer"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "notification_settings": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NotificationSettingsConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "parameters": {
+      "items": {
+        "$ref": "#/$defs/JobParameterConfig"
+      },
+      "title": "Parameters",
+      "type": "array"
+    },
+    "performance_target": {
+      "anyOf": [
+        {
+          "enum": [
+            "PERFORMANCE_OPTIMIZED",
+            "COST_OPTIMIZED"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Performance Target"
+    },
+    "queue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/QueueConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "run_as": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunAsConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "schedule": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ScheduleConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "object"
+    },
+    "tasks": {
+      "items": {
+        "$ref": "#/$defs/JobTaskConfig"
+      },
+      "minItems": 1,
+      "title": "Tasks",
+      "type": "array"
+    },
+    "timeout_seconds": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Timeout Seconds",
+      "type": "integer"
+    },
+    "trigger": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TriggerConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "usage_policy_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Usage Policy Id"
+    },
+    "webhook_notifications": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WebhookNotificationsConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "name",
+    "tasks"
+  ],
+  "title": "JobConfig",
+  "type": "object"
+}

@@ -1,0 +1,157 @@
+Copyright (2026) Databricks, Inc.
+This Software includes software developed at Databricks (https://www.databricks.com/) and its use is subject to the included LICENSE file.
+
+Dependencies are grouped below by license.
+The full text of each license is available via the link in the section header.
+
+MIT License
+
+This Software contains code from the following open source projects, licensed under the MIT license (https://opensource.org/licenses/MIT).
+
+Package: pydantic
+Project URL: https://github.com/pydantic/pydantic
+Copyright: Copyright (c) 2017 to present Pydantic Services Inc. and individual contributors.
+
+Package: PyYAML
+Project URL: https://github.com/yaml/pyyaml
+Copyright: Copyright (c) 2017-2021 Ingy döt Net; Copyright (c) 2006-2016 Kirill Simonov
+
+Package: typer
+Project URL: https://github.com/fastapi/typer
+Copyright: Copyright (c) 2019 Sebastián Ramírez
+
+Package: openai-agents
+Project URL: https://github.com/openai/openai-agents-python
+Copyright: Copyright (c) 2025 OpenAI
+
+Package: slowapi
+Project URL: https://github.com/laurents/slowapi
+Copyright: Copyright (c) 2020 Laurent Savaete
+
+Package: mcp
+Project URL: https://github.com/modelcontextprotocol/python-sdk
+Copyright: Copyright (c) 2024 Anthropic, PBC
+
+Package: nest_asyncio
+Project URL: https://github.com/erdewit/nest_asyncio
+Copyright: Copyright (c) 2018-2020, Ewald de Wit
+
+Package: pytest
+Project URL: https://github.com/pytest-dev/pytest
+Copyright: Copyright (c) 2004 Holger Krekel and others
+
+Package: ruff
+Project URL: https://github.com/astral-sh/ruff
+Copyright: Copyright (c) 2022 Charles Marsh
+
+Package: build
+Project URL: https://github.com/pypa/build
+Copyright: Copyright © 2019 Filipe Laíns filipe.lains@gmail.com
+
+Package: mypy
+Project URL: https://github.com/python/mypy
+Copyright: Copyright (c) 2012-2023 Jukka Lehtosalo and contributors; Copyright (c) 2015-2023 Dropbox, Inc.
+
+Package: pre-commit
+Project URL: https://github.com/pre-commit/pre-commit
+Copyright: Copyright (c) 2014 pre-commit dev team: Anthony Sottile, Ken Struys
+
+Package: openpyxl
+Project URL: https://foss.heptapod.net/openpyxl/openpyxl
+Copyright: Copyright (c) 2010 openpyxl
+
+Package: python-docx
+Project URL: https://github.com/python-openxml/python-docx
+Copyright: Copyright (c) 2013 Steve Canny, https://github.com/scanny
+
+Package: fastapi
+Project URL: https://github.com/fastapi/fastapi
+Copyright: Copyright (c) 2018 Sebastián Ramírez
+
+Apache License 2.0
+
+This Software contains code from the following open source projects, licensed under the Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+
+Package: databricks-sdk
+Project URL: https://github.com/databricks/databricks-sdk-py
+Copyright: Copyright 2023 Databricks, Inc. All rights reserved.
+
+Package: openai
+Project URL: https://github.com/openai/openai-python
+Copyright: Copyright 2026 OpenAI
+
+Package: mlflow
+Project URL: https://github.com/mlflow/mlflow
+Copyright: Copyright 2018 Databricks, Inc. All rights reserved.
+
+Package: a2a-sdk
+Project URL: https://github.com/a2aproject/a2a-python
+Copyright: Copyright aea-sdk Authors.
+
+Package: pytest-asyncio
+Project URL: https://github.com/pytest-dev/pytest-asyncio
+Copyright: Copyright pytest-asyncio Authors.
+
+Package: types-PyYAML
+Project URL: https://github.com/python/typeshed/tree/main/stubs/PyYAML
+Copyright: Copyright types-PyYAML Authors
+
+Package: python-multipart
+Project URL: https://github.com/Kludex/python-multipart
+Copyright: Copyright python-multipart Authors.
+
+BSD 3-Clause License
+
+This Software contains code from the following open source projects, licensed under the BSD 3-Clause license (https://opensource.org/license/bsd-3-clause).
+
+Package: click
+Project URL: https://github.com/pallets/click
+Copyright: Copyright (c) 2014 by Armin Ronacher.; Copyright (c) 2001-2006 Gregory P. Ward. All rights reserved.; Copyright (c) 2002-2006 Python Software Foundation. All rights reserved.
+
+Package: idna
+Project URL: https://github.com/kjd/idna
+Copyright: Copyright (c) 2013-2026, Kim Davies and contributors. All rights reserved.
+
+Package: protobuf
+Project URL: https://github.com/protocolbuffers/protobuf
+Copyright: Copyright 2008 Google Inc. All rights reserved.
+
+Package: httpx
+Project URL: https://github.com/encode/httpx
+Copyright: Copyright © 2019, Encode OSS Ltd. All rights reserved.
+
+Package: pypdf
+Project URL: https://github.com/py-pdf/pypdf
+Copyright: Copyright (c) 2006-2008, Mathieu Fenniak; Some contributions copyright (c) 2007, Ashish Kulkarni kulkarni.ashish@gmail.com; Some contributions copyright (c) 2014, Steve Witham switham_github@mac-guyver.com
+
+Package: defusedxml
+Project URL: https://github.com/tiran/defusedxml
+Copyright: Copyright (c) 2013-2023 by Christian Heimes christian@python.org; Licensed to PSF under a Contributor Agreement.
+
+Package: uvicorn
+Project URL: https://github.com/Kludex/uvicorn
+Copyright: Copyright © 2017-present, Encode OSS Ltd. All rights reserved.
+
+Databricks (DB) License
+
+This Software contains code from the following open source projects, licensed under the Databricks (DB) license (https://www.databricks.com/legal/db-license).
+
+Package: databricks-agents
+Project URL: https://pypi.org/project/databricks-agents/
+Copyright: Copyright (2024) Databricks, Inc.
+
+Package: databricks-openai
+Project URL: https://github.com/databricks/databricks-ai-bridge/tree/main/integrations/openai
+Copyright: Copyright (2024) Databricks, Inc.
+
+Package: databricks-ai-bridge
+Project URL: https://github.com/databricks/databricks-ai-bridge
+Copyright: Copyright (2024) Databricks, Inc.
+
+Package: databricks-connect
+Project URL: https://pypi.org/project/databricks-connect/
+Copyright: Copyright (2018) Databricks, Inc.
+
+Package: databricks-mcp
+Project URL: https://github.com/databricks/databricks-ai-bridge
+Copyright: Copyright (2024) Databricks, Inc.

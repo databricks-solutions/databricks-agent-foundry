@@ -1,0 +1,4 @@
+# No join specs needed -- the denormalized ${var.domain}_catalog_objects view
+# already contains the tables+columns join. The ${var.domain}_schema_summary
+# view is self-contained (one row per schema).
+join_specs: []

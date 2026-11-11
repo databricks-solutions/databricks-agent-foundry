@@ -1,0 +1,6 @@
+# Starter questions shown in the Genie UI.
+
+questions:
+  - question: "How many tables are in system.information_schema?"
+  - question: "What data types are used in the tables table?"
+  - question: "Which tables have the most columns?"

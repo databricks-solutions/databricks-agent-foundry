@@ -1,0 +1,73 @@
+# Databricks Sync Ignore Rules
+# =============================
+# Files matching these patterns are excluded from `databricks sync`,
+# preventing them from being uploaded to the workspace as part of the
+# deployed app source.
+#
+# State files are workspace-backed (see agent_foundry/state.py) and must not be
+# bundled with the source — bundling causes stale local state to override
+# fresh workspace state at runtime (see issue #50).
+#
+# Build artifacts and dev caches are also excluded to keep deploys fast.
+
+# Python build & cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Local virtualenvs
+.venv/
+venv/
+
+# Local Databricks CLI cache
+.databricks/
+
+# State files and build artifacts -- runtime reads these from the workspace
+_build/
+_state/
+instances/*/_build/
+instances/*/_state/
+instances/*/**/_build/
+instances/*/**/_state/
+
+# Secrets and dev configs (never bundle these)
+.env
+.env.*
+credentials.json
+
+# MLflow local artifacts
+mlruns/
+mlflow.db
+
+# Logs and temp
+*.log
+tmp/
+
+# Tests stay in the source tree by intent (used by app smoke tests),
+# but exclude generated reports
+htmlcov/
+.coverage
+
+# Defensive prunes (issue #112): once `agent-foundry deploy` syncs a
+# wheel-based staging dir (not the repo root), these paths never reach
+# the workspace.  Listed here so any regression that falls back to
+# syncing the repo root does NOT bloat the deploy with deploy-time-only
+# code -- the wheel already covers the runtime imports the App needs.
+agent_foundry/deploy/
+bricks/data/
+bricks/evaluation/
+bricks/genie/
+bricks/observability/
+bricks/serving/
+bricks/skills/
+bricks/sql_function/
+bricks/vector_search/
+bricks/warehouse/
+docs/
+dist/

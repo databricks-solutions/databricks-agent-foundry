@@ -1,0 +1,85 @@
+# yaml-language-server: $schema=../../../../.agent-foundry/schemas/rest_mcp_payload.schema.json
+#
+# rest_mcp payload manifest -- a declarative REST -> MCP proxy (issue #326)
+# =========================================================================
+# This is the SINGLE config contract for the rest_mcp payload.  The
+# agent-foundry framework only knows the generic envelope (``adapter`` + an
+# opaque ``spec``); everything below is interpreted by the rest_mcp payload
+# (payloads/rest_mcp/).
+#
+# What the deploy does with this file:
+#   * hosts one Databricks App running a Streamable-HTTP MCP server;
+#   * mounts each ``api`` entry at ``/mcp/<name>`` (one MCP server per API);
+#   * creates a governed Unity Catalog ``is_mcp`` connection per API pointing
+#     at that mount, so an agent reaches these tools through Unity AI Gateway
+#     (the connection name is published as ``${var.rest_mcp_connection__<name>}``).
+#
+# This example fronts the *public* GitHub REST API, which needs no credentials
+# for public data -- so it deploys and works end-to-end with zero secrets.
+payload:
+  adapter: rest_mcp
+  requires: []
+  spec:
+    apis:
+      - name: github
+        rest:
+          # hop 2: how the App reaches the upstream REST API.
+          base_url: "https://api.github.com"
+          # Egress allow-list: the engine refuses any request to a host not
+          # listed here (``base_url``'s host must appear).
+          allowed_hosts: ["api.github.com"]
+          # Public GitHub data needs no auth.  For higher rate limits or
+          # private repos, store a token in a Databricks secret and switch to:
+          #   auth:
+          #     mode: static
+          #     secret_scope: github_api
+          #     secret_key: token
+          auth:
+            mode: none
+        tools:
+          # Tier-1 declarative tool: path args -> MCP inputSchema + the request.
+          - name: get_repository
+            description: "Fetch metadata for a public GitHub repository."
+            request:
+              method: GET
+              path: "/repos/{owner}/{repo}"
+              args:
+                - { name: owner, in: path, type: string, required: true, description: "Repository owner (user or org login)." }
+                - { name: repo, in: path, type: string, required: true, description: "Repository name." }
+            response:
+              # Whitelist the fields returned to the model (keeps context lean).
+              project: ["full_name", "description", "stargazers_count", "forks_count", "open_issues_count", "html_url"]
+
+          # Query args + projection over a nested result set.
+          - name: search_repositories
+            description: "Search public GitHub repositories by keyword."
+            request:
+              method: GET
+              path: "/search/repositories"
+              args:
+                - { name: q, in: query, type: string, required: true, description: "Search query, e.g. 'databricks language:python'." }
+                - { name: sort, in: query, type: string, required: false, description: "Sort by: stars, forks, help-wanted-issues, or updated." }
+                - { name: per_page, in: query, type: integer, required: false, description: "Results per page (1-100; keep small to bound context)." }
+            response:
+              project: ["total_count", "incomplete_results", "items"]
+
+        # ------------------------------------------------------------------
+        # OPTIONAL governance layer (path C, Beta) -- uncomment to add a UC
+        # MCP Service on top of this API's connection (tool selection, service
+        # policies, rate limits, EXECUTE grants). Requires the account-level
+        # Unity AI Gateway + Managed MCP Servers previews; when off, deploy
+        # logs a warning and skips it (the connection still works). Agent
+        # consumption stays on the type: external connection either way.
+        # ------------------------------------------------------------------
+        # mcp_service:
+        #   enabled: true
+        #   # catalog/schema default to <catalog> + <schema_prefix>_rest_mcp.
+        #   include_tool_selectors: ["get_*", "search_repositories"]  # empty = all tools
+        #   service_policies:
+        #     - name: block_writes
+        #       policy_type: builtin          # a platform built-in policy name
+        #       handler: <builtin_policy_name>
+        #   rate_limits:
+        #     - { key: user, principal: "analyst@acme.com", calls: 100 }  # per-minute
+        #   grants:
+        #     execute: ["group:analysts"]

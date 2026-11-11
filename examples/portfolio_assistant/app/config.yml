@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=../../../.agent-foundry/schemas/agent_app_config.schema.json
+#
+# Agent App overrides for portfolio-assistant
+# =============================================
+# Merged on top of bricks/app/_scaffold/config.yml.
+# Only specify keys you want to override.
+#
+# ``app/`` is a generic Databricks App host: compute, resources, OBO
+# scopes, and which payload(s) to mount.  The agent runtime surface
+# (prompt, skills, MCP, UI toggles) lives under
+# ../payloads/agent/.  The LLM endpoint is resolved from
+# payloads/agent/payload.yml (spec.runtime.model.name) via
+# ${var.llm_endpoint_name}.
+
+# Payload(s) this host mounts (issue #338).  Each named payload owns its
+# runtime surface under payloads/<name>/.
+payloads:
+  - "agent"
+
+# Databricks Apps container size: medium (default) | large.
+compute_size: "large"
+
+# OBO scopes -- add or remove when you add/remove tools.
+user_authorization:
+  - sql
+  - dashboards.genie
+  - serving.serving-endpoints
+  - vectorsearch.vector-search-indexes
+  - catalog.catalogs:read
+  - catalog.schemas:read
+  - catalog.tables:read
+  - mcp.functions
+  - mcp.vectorsearch
+  - mcp.genie
+  - mcp.external

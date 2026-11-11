@@ -1,0 +1,22 @@
+#:schema ../../.agent-foundry/schemas/foundry-instance.schema.json
+#
+# Per-instance foundry.toml for the Unity Gateway example.
+#
+# The agent reaches most of its tools and skills through the Unity Gateway,
+# next to one workspace MCP server.  ``agent-foundry init`` rewrites the
+# identity fields below to match the project name you choose.
+#
+# Safety legend:
+#   SAFE TO CHANGE    -- deployer can freely modify
+#   CHANGE WITH CARE  -- must stay in sync with other config files
+
+# SAFE TO CHANGE: display name and description.
+name        = "unity-gateway-assistant"
+description = "Agent on Unity Gateway model and MCP services"
+
+# CHANGE WITH CARE: renaming requires a full redeploy -- every ${var.schema_prefix}
+# reference (UC schemas, tables, securables) must update.
+schema_prefix = "unity_gateway_assistant"
+
+[warehouse]
+mode = "dedicated"

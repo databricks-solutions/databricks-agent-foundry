@@ -1,0 +1,10 @@
+# Data Domain: docs_corpus
+# ========================
+# Synthetic Databricks documentation snippets for Vector Search demo.
+# Creates a Delta table (not a view) with Change Data Feed enabled,
+# suitable as a source for Delta Sync Vector Search indexes.
+
+domain:
+  name: docs_corpus
+  catalog: "${var.catalog}"
+  schema: "${var.schema_prefix}_indexes"

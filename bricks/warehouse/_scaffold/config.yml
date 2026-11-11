@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=../../../.agent-foundry/schemas/warehouse_config.schema.json
+#
+# SQL warehouse sizing for this instance
+# ======================================
+# Typed via agent_foundry.config.WarehouseConfig. Every field this
+# brick reads is surfaced below with its default; comment out or
+# delete the keys you want to inherit.
+#
+# Only relevant when foundry.toml [warehouse] mode = "dedicated"
+# (the default). In mode = "reuse" this file MUST be deleted -- the
+# warehouse brick does not provision a warehouse, so size / auto_stop
+# / tags would be dead config.
+#
+# Safety legend:
+#   SAFE TO CHANGE    -- deployer can freely modify
+#   CHANGE WITH CARE  -- affects cost / performance significantly
+
+# CHANGE WITH CARE: warehouse t-shirt size. Larger = faster, more $/hr.
+# Common values: "2X-Small", "X-Small", "Small", "Medium", "Large",
+# "X-Large", "2X-Large", "3X-Large", "4X-Large".
+size: "X-Small"
+
+# CHANGE WITH CARE: idle minutes before the warehouse auto-stops.
+# Lower saves cost but adds cold-start latency on the next query.
+auto_stop_mins: 30
+
+# CHANGE WITH CARE: multi-cluster autoscaling bounds. The warehouse
+# autoscales between min_num_clusters and max_num_clusters based on
+# concurrent query load. min=max disables autoscaling. Raising the
+# floor reduces cold-start; raising the ceiling absorbs concurrency
+# spikes at higher cost. REST contract: 1 <= min <= max <= 40.
+min_num_clusters: 1
+max_num_clusters: 2
+
+# SAFE TO CHANGE: extra tags applied to the warehouse in Databricks.
+# Useful for cost attribution dashboards. The deploy script
+# automatically injects an ``ai_solution_managed_by`` tag pointing at
+# the instance; values supplied here are merged on top.
+tags: {}

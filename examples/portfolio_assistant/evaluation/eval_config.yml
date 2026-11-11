@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=../../../.agent-foundry/schemas/evaluation_config.schema.json
+#
+# Evaluation Configuration for portfolio-assistant
+# =================================================
+# Overrides bricks/evaluation/conf/eval_config.yml for this instance.
+# Only specify keys you want to change; the rest inherit from the brick default.
+# The experiment name is computed automatically from foundry.toml (app_name)
+# and the target (deployer).
+
+# Add or remove scorers to match your evaluation needs.
+scorers:
+  # Applied to all evaluation modes (no trace internals needed).
+  default:
+    - Safety
+    - RelevanceToQuery
+
+  # Applied when evaluation data includes expectations.
+  with_ground_truth:
+    - Correctness
+    - ToolCallCorrectness
+
+  # Applied only in --mode traces (requires RETRIEVER spans in trace).
+  traces_only:
+    - RetrievalGroundedness
+
+  custom:
+    - tool_routing_accuracy
+    - genie_sql_correctness
+    - response_quality
+
+# Max number of traces to evaluate per run.
+max_traces: 200
+
+# UC table for golden set (uncomment to use).
+# dataset: "${var.catalog}.${var.schema_prefix}_agent.golden_set"
+
+# Production monitoring sample rate and scorer selection.
+production_monitoring:
+  sample_rate: 0.5
+  scorers:
+    - Safety
+    - RelevanceToQuery
+    - response_quality

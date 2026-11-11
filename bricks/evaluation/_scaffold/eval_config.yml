@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=../../../.agent-foundry/schemas/evaluation_config.schema.json
+#
+# Evaluation config for this instance
+# ===================================
+# Typed via agent_foundry.config.EvaluationConfig. Every field this
+# brick reads is surfaced below; each is optional, omit a key to
+# inherit the framework default from bricks/evaluation/conf/eval_config.yml.
+#
+# Scorer names reference:
+#   Built-in LLM judges:  Safety, RelevanceToQuery, RetrievalGroundedness,
+#                         Correctness, ToolCallCorrectness, Guidelines
+#   Custom scorers:       tool_routing_accuracy, genie_sql_correctness,
+#                         response_quality
+#
+# Safety legend:
+#   SAFE TO CHANGE    -- deployer can freely modify
+#   CHANGE WITH CARE  -- changes what is monitored in production
+
+# SAFE TO CHANGE: scorer selection by evaluation mode. The buckets
+# below match the four code paths in run_evaluation.py:
+#   default           -- always applied (no trace internals needed)
+#   with_ground_truth -- applied when eval data has expectations
+#   traces_only       -- applied in --mode traces; RetrievalGroundedness
+#                        is opt-in (errors without RETRIEVER spans, #61)
+#   custom            -- code-based scorers (always applied)
+scorers:
+  default:
+    - Safety
+    - RelevanceToQuery
+  with_ground_truth:
+    - Correctness
+  traces_only: []
+  custom:
+    - tool_routing_accuracy
+    - genie_sql_correctness
+    - response_quality
+
+# SAFE TO CHANGE: maximum traces to fetch in --mode traces.
+# Higher = more eval coverage but slower run and more $.
+max_traces: 100
+
+# SAFE TO CHANGE: production monitoring -- scorers registered against
+# the deployed agent's MLflow experiment. Sampled per request.
+#   sample_rate -- 0.0 disables, 1.0 evaluates every request.
+#   scorers     -- subset of the names above; typically lighter than
+#                  development scorers to control cost.
+production_monitoring:
+  sample_rate: 0.5
+  scorers:
+    - Safety
+    - RelevanceToQuery
+    - response_quality

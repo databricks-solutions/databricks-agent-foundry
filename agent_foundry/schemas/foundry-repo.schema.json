@@ -1,0 +1,78 @@
+{
+  "$defs": {
+    "InstanceRef": {
+      "additionalProperties": false,
+      "description": "A pointer from the repo-root file to one per-instance directory.\n\nThe repo-root ``foundry.toml`` lists ``[[instances]]`` entries with\nonly a ``path``; identity fields (``name``, ``schema_prefix``, ...)\nlive in the per-instance ``foundry.toml`` at that path.  Keeping\nthe repo-root entry minimal ensures the audience split is\nstructural -- you cannot author an instance identity field at the\nrepo root and have it \"accidentally work\".",
+      "properties": {
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "InstanceRef",
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "description": "One environment target authored at the repo root.\n\nMirrors the field set of\n:class:`agent_foundry.config.TargetConfig` but uses\n``extra=\"forbid\"`` so unknown keys in ``foundry.toml`` raise at\nload time rather than being silently dropped.\n\nAll fields are optional in isolation, but the framework's deploy\npath requires at minimum ``host`` and ``catalog`` to be set for\nany target that actually receives a deploy.  That runtime\nrequirement is enforced by the orchestrator (F-PR5), not here,\nbecause dry-run validation and ``agent-foundry config show`` must\nstill be able to load a partially-configured target without\nfailing.\n\n``warehouse_id`` is **not** authored here -- it is a per-instance\nconcern as of ``schema_version = 2`` (see :class:`Warehouse`).\nThe repo-root target owns workspace identity (host, catalog,\nprofile) and authoring identity (deployer); the warehouse a given\ninstance binds to lives in\n:attr:`FoundryInstanceConfig.warehouse`.",
+      "properties": {
+        "catalog": {
+          "default": "",
+          "title": "Catalog",
+          "type": "string"
+        },
+        "deployer": {
+          "default": "",
+          "title": "Deployer",
+          "type": "string"
+        },
+        "host": {
+          "default": "",
+          "title": "Host",
+          "type": "string"
+        },
+        "profile": {
+          "default": "",
+          "title": "Profile",
+          "type": "string"
+        },
+        "schema": {
+          "default": "analytics",
+          "title": "Schema",
+          "type": "string"
+        }
+      },
+      "title": "Target",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Typed shape of the repo-root ``foundry.toml``.\n\nExample::\n\n    schema_version = 2\n\n    [targets.dev]\n    host    = \"https://workspace.cloud.databricks.com\"\n    catalog = \"main\"\n    profile = \"dev-profile\"\n\n    [[instances]]\n    path = \"instances/portfolio-assistant\"\n\nThe ``schema_version`` field pins the framework <-> downstream\ncontract so future breaking changes to the on-disk shape are\nexplicit -- the loader refuses to read files whose\n``schema_version`` it does not recognise (see\n:data:`CURRENT_SCHEMA_VERSION`).",
+  "properties": {
+    "instances": {
+      "items": {
+        "$ref": "#/$defs/InstanceRef"
+      },
+      "title": "Instances",
+      "type": "array"
+    },
+    "schema_version": {
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "targets": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Target"
+      },
+      "title": "Targets",
+      "type": "object"
+    }
+  },
+  "title": "FoundryRepoConfig",
+  "type": "object"
+}

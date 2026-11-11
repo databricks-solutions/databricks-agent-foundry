@@ -1,0 +1,8 @@
+# SQL Function Brick — Instance Configuration
+# ==============================================
+# Functions are deployed to the agent schema (auto-computed from
+# InstanceConfig.agent_schema).  Override only if you need a
+# different target schema.
+#
+# catalog: "${var.catalog}"
+# schema: "${var.agent_schema_name}"

@@ -1,0 +1,320 @@
+{
+  "$defs": {
+    "DeltaSyncIndex": {
+      "additionalProperties": false,
+      "description": "A Delta Sync index: ``index_type: DELTA_SYNC`` + ``delta_sync:`` block.",
+      "properties": {
+        "delta_sync": {
+          "$ref": "#/$defs/DeltaSyncSpec"
+        },
+        "index_type": {
+          "const": "DELTA_SYNC",
+          "default": "DELTA_SYNC",
+          "title": "Index Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "primary_key": {
+          "title": "Primary Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "primary_key",
+        "delta_sync"
+      ],
+      "title": "DeltaSyncIndex",
+      "type": "object"
+    },
+    "DeltaSyncSpec": {
+      "additionalProperties": false,
+      "description": "The ``delta_sync:`` block (required when ``index_type=DELTA_SYNC``).\n\nMaps to the SDK ``DeltaSyncVectorIndexSpecRequest``.  The index\nauto-syncs from ``source_table``; ``pipeline_type`` controls triggered\nvs continuous sync, ``columns_to_sync`` narrows the synced columns\n(omit to sync all), and ``embedding_writeback_table`` optionally\npersists computed embeddings to a Delta table.",
+      "properties": {
+        "columns_to_sync": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Columns To Sync"
+        },
+        "embedding_source_columns": {
+          "items": {
+            "$ref": "#/$defs/EmbeddingSourceColumn"
+          },
+          "title": "Embedding Source Columns",
+          "type": "array"
+        },
+        "embedding_vector_columns": {
+          "items": {
+            "$ref": "#/$defs/EmbeddingVectorColumn"
+          },
+          "title": "Embedding Vector Columns",
+          "type": "array"
+        },
+        "embedding_writeback_table": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Embedding Writeback Table"
+        },
+        "pipeline_type": {
+          "default": "TRIGGERED",
+          "enum": [
+            "TRIGGERED",
+            "CONTINUOUS"
+          ],
+          "title": "Pipeline Type",
+          "type": "string"
+        },
+        "source_table": {
+          "title": "Source Table",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_table"
+      ],
+      "title": "DeltaSyncSpec",
+      "type": "object"
+    },
+    "DirectAccessIndex": {
+      "additionalProperties": false,
+      "description": "A Direct Access index: ``index_type: DIRECT_ACCESS`` + ``direct_access:`` block.",
+      "properties": {
+        "direct_access": {
+          "$ref": "#/$defs/DirectAccessSpec"
+        },
+        "index_type": {
+          "const": "DIRECT_ACCESS",
+          "title": "Index Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "primary_key": {
+          "title": "Primary Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "index_type",
+        "name",
+        "primary_key",
+        "direct_access"
+      ],
+      "title": "DirectAccessIndex",
+      "type": "object"
+    },
+    "DirectAccessSpec": {
+      "additionalProperties": false,
+      "description": "The ``direct_access:`` block (required when ``index_type=DIRECT_ACCESS``).\n\nMaps to the SDK ``DirectAccessVectorIndexSpec``.  The user manages CRUD\nvia REST/SDK; ``schema_json`` declares the index schema.\n\n``schema_json`` is exposed under an alias because the bare attribute\nname would shadow Pydantic's deprecated ``BaseModel.schema_json``\nclassmethod (same pattern as ``ServerConfig.schema_``).\n``populate_by_name=True`` keeps the on-disk YAML key ``schema_json``.",
+      "properties": {
+        "embedding_source_columns": {
+          "items": {
+            "$ref": "#/$defs/EmbeddingSourceColumn"
+          },
+          "title": "Embedding Source Columns",
+          "type": "array"
+        },
+        "embedding_vector_columns": {
+          "items": {
+            "$ref": "#/$defs/EmbeddingVectorColumn"
+          },
+          "title": "Embedding Vector Columns",
+          "type": "array"
+        },
+        "schema_json": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema Json"
+        }
+      },
+      "title": "DirectAccessSpec",
+      "type": "object"
+    },
+    "EmbeddingSourceColumn": {
+      "additionalProperties": false,
+      "description": "A column whose text is embedded by a Databricks-managed model.\n\nMaps to the SDK ``EmbeddingSourceColumn``.  ``model_endpoint_name_for_query``\noptionally overrides the embedding model used at query time (ingestion\nstill uses ``embedding_model_endpoint_name``).",
+      "properties": {
+        "embedding_model_endpoint_name": {
+          "title": "Embedding Model Endpoint Name",
+          "type": "string"
+        },
+        "model_endpoint_name_for_query": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Endpoint Name For Query"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "embedding_model_endpoint_name"
+      ],
+      "title": "EmbeddingSourceColumn",
+      "type": "object"
+    },
+    "EmbeddingVectorColumn": {
+      "additionalProperties": false,
+      "description": "A column that already contains pre-computed embedding vectors.\n\nMaps to the SDK ``EmbeddingVectorColumn``.  Used for the \"build from a\nDelta table that already has embeddings\" path (and for Direct Access\nindexes that store vectors directly).",
+      "properties": {
+        "embedding_dimension": {
+          "exclusiveMinimum": 0,
+          "title": "Embedding Dimension",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "embedding_dimension"
+      ],
+      "title": "EmbeddingVectorColumn",
+      "type": "object"
+    },
+    "EndpointConfig": {
+      "additionalProperties": false,
+      "description": "The ``endpoint:`` block of ``index_config.yml``.\n\nEndpoints are shared across indexes; the deploy script creates the\nendpoint only if it does not already exist.\n\n``endpoint_type`` maps to the SDK ``EndpointType`` enum.  ``target_qps``\nis a best-effort high-throughput target for ``STANDARD`` endpoints;\n``budget_policy_id`` / ``usage_policy_id`` attach the endpoint to a\nDatabricks budget / usage policy.  All three are optional and are only\nsent to the API when set.",
+      "properties": {
+        "budget_policy_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Budget Policy Id"
+        },
+        "endpoint_type": {
+          "default": "STANDARD",
+          "enum": [
+            "STANDARD",
+            "STORAGE_OPTIMIZED"
+          ],
+          "title": "Endpoint Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "target_qps": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Qps"
+        },
+        "usage_policy_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage Policy Id"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "EndpointConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The YAML shape of ``vector_indexes/<name>/index_config.yml``.\n\n``tool_name`` is the stable LLM-facing identifier the skills assembler\nbinds to this index (defaults to the directory name when omitted).",
+  "properties": {
+    "endpoint": {
+      "$ref": "#/$defs/EndpointConfig"
+    },
+    "index": {
+      "discriminator": {
+        "mapping": {
+          "DELTA_SYNC": "#/$defs/DeltaSyncIndex",
+          "DIRECT_ACCESS": "#/$defs/DirectAccessIndex"
+        },
+        "propertyName": "index_type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DeltaSyncIndex"
+        },
+        {
+          "$ref": "#/$defs/DirectAccessIndex"
+        }
+      ],
+      "title": "Index"
+    },
+    "tool_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool Name"
+    }
+  },
+  "required": [
+    "endpoint",
+    "index"
+  ],
+  "title": "IndexConfig",
+  "type": "object"
+}

@@ -1,0 +1,161 @@
+# yaml-language-server: $schema=../../../../../../.agent-foundry/schemas/mcp_server_config.schema.json
+#
+# MCP Server -- per-instance configuration
+# =========================================
+# One file per server, at:
+#     instances/<app>/mcp_servers/<name>/server.yml
+#
+# The brick name (directory name, e.g. "agent_functions") becomes the
+# default tool name prefix ("agent_functions__lookup_status"). Override
+# via tools.name_prefix below.
+#
+# ---------------------------------------------------------------------------
+# type: pick exactly ONE of the six values below
+# ---------------------------------------------------------------------------
+type: managed_functions
+description: "UC functions deployed by the sql_function brick (default)."
+
+# Type-specific fields. Uncomment the block matching the chosen ``type``
+# and delete the others.
+#
+# managed_functions / managed_vector_search:
+catalog: "${var.catalog}"
+schema: "${var.schema_prefix}_agent"
+#
+# managed_genie:
+# space_id: "${var.sales_genie_space_id}"
+#
+# managed_sql:
+# (no extra fields)
+#
+# external (proxied via a Databricks UC connection):
+# connection_name: "github_mcp"
+#
+# custom_app (user-hosted MCP server, OBO auth only):
+# app_url: "https://my-mcp.workspace.databricksapps.com"
+
+# ---------------------------------------------------------------------------
+# Tools (required)
+# ---------------------------------------------------------------------------
+tools:
+  # Tool names exposed to the LLM. Required, must be non-empty (the
+  # brick fails closed -- so every callable surface is opt-in).
+  #
+  # Each entry is either:
+  #   - a bare string -- exact match against the upstream tool name,
+  #     no rename. The legacy shape; still the right choice when the
+  #     upstream tool name is already what you want the LLM to call.
+  #   - a mapping with ``match`` (fnmatch glob, ``*`` / ``?`` / ``[abc]``)
+  #     and optional ``expose_as`` (clean alias). Use this when the
+  #     upstream tool name embeds a UUID, catalog, or schema (managed
+  #     Genie / Functions / Vector Search all do) and the raw name
+  #     would be unreadable for the LLM.
+  #
+  # Examples:
+  #   allow:
+  #     - lookup_status                            # exact match, no rename
+  #     - match: "query_space_*"                   # glob match
+  #       expose_as: query_space                   # rename to short alias
+  #     - match: "*__*__format_byte_size"          # tail-glob
+  #       expose_as: format_byte_size
+  #
+  # Each entry must collapse to a unique LLM-visible name (the
+  # validator rejects duplicate ``expose_as`` aliases).
+  allow:
+    - lookup_status
+    - lookup_owner
+  # Optional: prefix added to every (possibly aliased) tool name
+  # surfaced to the LLM, so trace span keys stay unique across
+  # servers. Defaults to the directory name plus "__"
+  # (e.g. "agent_functions__lookup_status"). Must match
+  # ^[a-z][a-z0-9_]*__$. Set to "" to opt out of prefixing entirely
+  # -- recommended when ``expose_as`` already gives every tool a
+  # globally unique alias.
+  # name_prefix: "agent_functions__"
+  #
+  # Optional: defaults injected into every call_tool ``_meta`` field
+  # (top-level on the JSON-RPC params, *not* merged into arguments).
+  # LLM-supplied keys override these.
+  #
+  # Databricks AI Search options (managed_vector_search):
+  # default_meta:
+  #   # Comma-separated result columns. Omit to return all non-internal columns.
+  #   columns: "id,content,doc_uri"
+  #   # Comma-separated columns supplied to the reranker. Omit to disable reranking.
+  #   columns_to_rerank: "content,title"
+  #   # JSON string using the index's supported Vector Search filter syntax.
+  #   filters: '{"category": "documentation"}'
+  #   # Include similarity scores in results (default: false).
+  #   include_score: true
+  #   # Positive number of results to return.
+  #   num_results: 10
+  #   # ANN (default) or HYBRID.
+  #   query_type: "HYBRID"
+  #   # Exclude results below this similarity score.
+  #   score_threshold: 0.5
+
+# ---------------------------------------------------------------------------
+# Prompts (optional, default disabled)
+# ---------------------------------------------------------------------------
+# When enabled (PR 4 / #110), the named prompts are fetched once per
+# request via ``prompts/get`` and concatenated under a "## Tool Manuals"
+# section appended to the agent's system prompt. Use this when the
+# upstream MCP server bundles authoritative tool usage docs you want
+# the LLM to see verbatim.
+#
+# prompts:
+#   enabled: false                       # must be true to consume
+#   allow: []                            # exact prompt names; ["*"] = all listed
+#   inject_into: system_prompt           # system_prompt | none
+#                                        #   (dynamic_instructions accepted for forward-compat)
+#   cache: per_conversation              # per_request | per_conversation
+#                                        #   per_conversation -> bounded LRU keyed on
+#                                        #   (server_url, conversation_id), max 256 entries
+
+# ---------------------------------------------------------------------------
+# Resources (optional, default disabled)
+# ---------------------------------------------------------------------------
+# When enabled (PR 4 / #110), a synthetic ``<name_prefix>read_resource(uri)``
+# FunctionTool is added to the agent so the LLM can pull URI-keyed
+# read-only data (config files, schema docs, policy snippets) on demand.
+# The tool description enumerates the allow-list so the LLM can pick a
+# real URI rather than guessing.
+#
+# resources:
+#   enabled: false
+#   allow: []                            # exact URIs or fnmatch globs;
+#                                        #   ``*`` crosses ``/`` (intentional for
+#                                        #   content-addressable URIs like
+#                                        #   ``repo://databricks/*/README.md``).
+#   expose_as: read_tool                 # read_tool | none
+
+# ---------------------------------------------------------------------------
+# Auto-poll (optional; defaulted on for managed_sql + managed_genie)
+# ---------------------------------------------------------------------------
+# Many Databricks-managed MCP servers expose an asynchronous
+# ``submit -> poll`` shape: the submit tool returns a receipt
+# (``status: PENDING``) and a poll tool re-fetches it until terminal.
+# When ``auto_poll`` is enabled, the wrapper absorbs that cycle
+# internally -- the LLM sees ONE call to the trigger tool and ONE
+# response (the terminal poll result), with no intermediate "tool
+# cells" cluttering the chat UI.  The poll tool is hidden from the
+# LLM-visible toolset by default (``hide_poll_tool: true``).
+#
+# managed_sql and managed_genie ship with sensible defaults; you only
+# need to set this field to disable (``auto_poll: false``) or override
+# (full dict).  External / custom_app servers must opt in explicitly.
+#
+# auto_poll: true                          # use type default (default)
+# auto_poll: false                         # disabled; LLM chains itself
+# auto_poll:                               # explicit override
+#   trigger: my_submit_tool                # alias name (post expose_as)
+#   poll_with: my_poll_tool                # alias name (post expose_as)
+#   forward_args:                          # fields to lift submit -> poll
+#     - {from_field: statement_id, to_arg: statement_id}
+#   state_field: "status.state"            # dotted path; "" or missing = no polling
+#   pending_states: ["PENDING", "RUNNING"]
+#   timeout_s: 120.0                       # give up after this many seconds
+#   initial_interval_s: 0.5                # exponential backoff start
+#   max_interval_s: 5.0                    # cap
+#   backoff_factor: 2.0
+#   hide_poll_tool: true                   # remove poll tool from LLM toolset

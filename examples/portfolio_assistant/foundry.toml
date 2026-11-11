@@ -1,0 +1,53 @@
+#:schema ../../.agent-foundry/schemas/foundry-instance.schema.json
+#
+# Per-instance foundry.toml (typed via agent_foundry.public.FoundryInstanceConfig).
+#
+# Owns the agent-author surface (identity, feature toggles).  Workspace
+# targets live in the repo-root `foundry.toml`; per-brick content (agent prompt,
+# warehouse settings, evaluation, ...) stays in `<brick>/*.yml`.
+#
+# Safety legend:
+#   SAFE TO CHANGE    -- deployer can freely modify
+#   CHANGE WITH CARE  -- must stay in sync with other config files
+
+# SAFE TO CHANGE: display name and description.
+#
+# ``app_name`` and ``chat_ui_app_name`` derive from ``name`` when
+# omitted (framework default since the typed-config schema_version=2
+# follow-ups).  Override either explicitly if the instance's app
+# names must diverge from its identity name -- e.g. the 30-char
+# Databricks Apps limit, or a multi-app instance.
+name        = "portfolio-assistant"
+description = "Agent with Genie Space analytics and Vector Search document retrieval"
+
+# CHANGE WITH CARE: renaming requires a full redeploy -- every ${var.schema_prefix}
+# reference (UC schemas, tables, securables, MCP URLs) must update.
+schema_prefix = "portfolio_assistant"
+
+# SAFE TO CHANGE: Vector Search endpoint name. Endpoints are shared
+# infrastructure (not instance-scoped); indexes still live in this
+# instance's schema. Multiple instances may reuse one endpoint.
+vs_endpoint_name = "vs_docs_demo"
+
+# SAFE TO CHANGE: warehouse binding (schema_version = 2).
+#
+# Two modes:
+#   mode = "dedicated"  -- the warehouse brick provisions a fresh SQL
+#                          warehouse for this instance. Sizing /
+#                          auto-stop / tags come from
+#                          warehouse/config.yml.
+#   mode = "reuse"      -- bind to an existing workspace warehouse.
+#                          warehouse_id is required and
+#                          warehouse/config.yml MUST be deleted
+#                          (strict-overlap rule: dead config in
+#                          reuse mode).
+#
+# Default is "dedicated"; declared explicitly here to document intent.
+[warehouse]
+mode = "dedicated"
+# warehouse_id = "..."  # required when mode = "reuse"
+
+# Runtime toggles are NOT authored here. They live once, in the agent
+# payload's spec (the single config contract):
+# payloads/agent/payload.yml -> spec.ui.{chat_history,file_upload,charts,feedback,tool_output},
+# spec.runtime.tools.skills, spec.integrations.{a2a,mcp_server}.

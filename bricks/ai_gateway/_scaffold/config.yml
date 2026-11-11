@@ -1,0 +1,8 @@
+# Unity Gateway brick: git-managed gateway artifacts.
+# ======================================================
+# Every folder under skills/ is deployed as a Unity Catalog skill into
+# this schema (created when missing). ${var.*} placeholders are allowed.
+# Reference the skills from payloads/agent/payload.yml
+# (runtime.tools.skills.gateway pinned FQNs or discovery locations).
+skills:
+  schema: "${var.catalog}.${var.schema_prefix}_skills"

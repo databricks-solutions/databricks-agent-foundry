@@ -1,0 +1,36 @@
+name: Acceptance janitor (report-only)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  report:
+    name: Report leaked ephemeral Apps
+    if: github.repository != 'databricks-solutions/databricks-agent-foundry'
+    runs-on: ubuntu-latest
+    environment: framework-acceptance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Install from lock (public PyPI)
+        run: uv sync --frozen --extra dev
+      - name: Report matching Apps
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          AGENT_FOUNDRY_TEST_CATALOG: ${{ vars.AGENT_FOUNDRY_TEST_CATALOG }}
+        run: uv run --no-sync python -m agent_foundry.testing.janitor

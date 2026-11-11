@@ -1,0 +1,13 @@
+# Genie Space: Catalog Explorer
+# ==============================
+# Genie Space that queries curated views on Unity Catalog metadata.
+# Views are deployed by the catalog_explorer data domain.
+#
+# Auto-computed fields (title, warehouse_id, parent_path) are injected
+# by the assemble script from InstanceConfig variables.
+
+description: "Query Unity Catalog metadata -- tables, columns, data types, and schemas -- via curated analytical views."
+# The agent reaches this space through mcp_servers/catalog_genie/.
+
+variables:
+  domain: "catalog_explorer"

@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 600" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
+  <rect x="0" y="0" width="1320" height="600" fill="#ffffff"/>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#57606a"/>
+    </marker>
+  </defs>
+
+  <!-- Clients -->
+  <rect x="20" y="100" width="140" height="40" rx="20" fill="#ffffff" stroke="#57606a" stroke-width="1.5"/>
+  <text x="90" y="124" text-anchor="middle" font-size="12" fill="#1f2328">End User</text>
+  <rect x="20" y="162" width="140" height="40" rx="20" fill="#ffffff" stroke="#57606a" stroke-width="1.5"/>
+  <text x="90" y="186" text-anchor="middle" font-size="12" fill="#1f2328">MCP client</text>
+  <rect x="20" y="224" width="140" height="40" rx="20" fill="#ffffff" stroke="#57606a" stroke-width="1.5"/>
+  <text x="90" y="248" text-anchor="middle" font-size="12" fill="#1f2328">A2A client</text>
+
+  <!-- App host container -->
+  <rect x="196" y="40" width="280" height="288" rx="8" fill="#f0f4fb" stroke="#7a93c0" stroke-width="1.5"/>
+  <text x="336" y="60" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">app brick &#8212; generic App host</text>
+  <rect x="216" y="72" width="240" height="46" rx="6" fill="#ffffff" stroke="#57606a" stroke-width="1.2"/>
+  <text x="336" y="99" text-anchor="middle" font-size="12" fill="#1f2328">request surface</text>
+  <text x="336" y="140" text-anchor="middle" font-size="11" fill="#5a4b8a">payload &#8212; swap via payload.yml adapter</text>
+  <rect x="216" y="150" width="240" height="42" rx="6" fill="#d2f4dd" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="336" y="176" text-anchor="middle" font-size="12" fill="#1f2328">agent  (built-in &#183; selected)</text>
+  <rect x="216" y="200" width="240" height="42" rx="6" fill="#ffffff" stroke="#8250df" stroke-width="1.4" stroke-dasharray="5 3"/>
+  <text x="336" y="226" text-anchor="middle" font-size="12" fill="#1f2328">rest_mcp</text>
+  <rect x="216" y="250" width="240" height="42" rx="6" fill="#ffffff" stroke="#8250df" stroke-width="1.4" stroke-dasharray="5 3"/>
+  <text x="336" y="276" text-anchor="middle" font-size="12" fill="#1f2328">your payload</text>
+
+  <!-- MCP allowlist gate -->
+  <polygon points="535,182 565,134 675,134 705,182 675,230 565,230" fill="#fff3cd" stroke="#9a6700" stroke-width="1.5"/>
+  <text x="620" y="177" text-anchor="middle" font-size="11.5" font-weight="600" fill="#1f2328">mcp &#8212; allowlist gate</text>
+  <text x="620" y="195" text-anchor="middle" font-size="10.5" fill="#5c4813">tools.allow &#183; fail-closed</text>
+
+  <!-- Tool servers container -->
+  <rect x="740" y="52" width="222" height="300" rx="8" fill="#f6f8fa" stroke="#afb8c1" stroke-width="1.5"/>
+  <text x="851" y="72" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">tool servers &#8212; any combination</text>
+  <rect x="760" y="86" width="182" height="36" rx="6" fill="#ffe0cc" stroke="#c4551d" stroke-width="1.2"/>
+  <text x="851" y="109" text-anchor="middle" font-size="12" fill="#1f2328">genie</text>
+  <rect x="760" y="130" width="182" height="36" rx="6" fill="#ffe0cc" stroke="#c4551d" stroke-width="1.2"/>
+  <text x="851" y="153" text-anchor="middle" font-size="12" fill="#1f2328">vector_search</text>
+  <rect x="760" y="174" width="182" height="36" rx="6" fill="#ffe0cc" stroke="#c4551d" stroke-width="1.2"/>
+  <text x="851" y="197" text-anchor="middle" font-size="12" fill="#1f2328">sql_function</text>
+  <rect x="760" y="218" width="182" height="36" rx="6" fill="#ffe0cc" stroke="#c4551d" stroke-width="1.2"/>
+  <text x="851" y="241" text-anchor="middle" font-size="12" fill="#1f2328">warehouse (managed_sql)</text>
+  <rect x="760" y="262" width="182" height="46" rx="6" fill="#ffe0cc" stroke="#c4551d" stroke-width="1.2"/>
+  <text x="851" y="282" text-anchor="middle" font-size="12" fill="#1f2328">external MCP</text>
+  <text x="851" y="298" text-anchor="middle" font-size="10.5" fill="#57606a">GitHub &#183; Jira &#183; &#8230;</text>
+
+  <!-- Data container -->
+  <rect x="1004" y="112" width="180" height="150" rx="8" fill="#f6f8fa" stroke="#afb8c1" stroke-width="1.5"/>
+  <text x="1094" y="132" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">data brick</text>
+  <rect x="1022" y="146" width="144" height="40" rx="6" fill="#ffe0cc" stroke="#c4551d" stroke-width="1.2"/>
+  <text x="1094" y="171" text-anchor="middle" font-size="12" fill="#1f2328">curated views</text>
+  <rect x="1022" y="196" width="144" height="40" rx="6" fill="#ffe0cc" stroke="#c4551d" stroke-width="1.2"/>
+  <text x="1094" y="221" text-anchor="middle" font-size="12" fill="#1f2328">delta tables</text>
+
+  <!-- Operations container -->
+  <rect x="196" y="372" width="280" height="150" rx="8" fill="#f6f8fa" stroke="#afb8c1" stroke-width="1.5"/>
+  <text x="336" y="392" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">operations bricks</text>
+  <rect x="212" y="406" width="80" height="98" rx="6" fill="#ffe0cc" stroke="#c4551d" stroke-width="1.2"/>
+  <text x="252" y="450" text-anchor="middle" font-size="11.5" fill="#1f2328">MLflow</text>
+  <text x="252" y="466" text-anchor="middle" font-size="11.5" fill="#1f2328">tracing</text>
+  <rect x="298" y="406" width="80" height="98" rx="6" fill="#ffe0cc" stroke="#c4551d" stroke-width="1.2"/>
+  <text x="338" y="459" text-anchor="middle" font-size="10.5" fill="#1f2328">observability</text>
+  <rect x="384" y="406" width="80" height="98" rx="6" fill="#ffe0cc" stroke="#c4551d" stroke-width="1.2"/>
+  <text x="424" y="459" text-anchor="middle" font-size="11.5" fill="#1f2328">evaluation</text>
+
+  <!-- Flow arrows -->
+  <line x1="160" y1="120" x2="192" y2="120" stroke="#57606a" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <line x1="160" y1="182" x2="192" y2="182" stroke="#57606a" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <line x1="160" y1="244" x2="192" y2="244" stroke="#57606a" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <line x1="476" y1="182" x2="531" y2="182" stroke="#57606a" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="503" y="172" text-anchor="middle" font-size="10.5" fill="#57606a">every tool call</text>
+  <line x1="705" y1="182" x2="736" y2="182" stroke="#57606a" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="720" y="172" text-anchor="middle" font-size="10.5" fill="#57606a">allowed</text>
+  <line x1="962" y1="182" x2="1000" y2="182" stroke="#57606a" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="981" y="172" text-anchor="middle" font-size="10.5" fill="#57606a">query</text>
+  <line x1="336" y1="328" x2="336" y2="368" stroke="#57606a" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="363" y="352" text-anchor="middle" font-size="10.5" fill="#57606a">traces</text>
+
+  <!-- Unity Catalog foundation -->
+  <line x1="336" y1="522" x2="336" y2="536" stroke="#9aa5b1" stroke-width="1.4" stroke-dasharray="3 4"/>
+  <line x1="851" y1="352" x2="851" y2="536" stroke="#9aa5b1" stroke-width="1.4" stroke-dasharray="3 4"/>
+  <line x1="1094" y1="262" x2="1094" y2="536" stroke="#9aa5b1" stroke-width="1.4" stroke-dasharray="3 4"/>
+  <rect x="20" y="536" width="1164" height="48" rx="8" fill="#e7eef7" stroke="#4b6b8a" stroke-width="1.5"/>
+  <text x="602" y="565" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2328">Unity Catalog &#8212; governance foundation: catalogs &#183; schemas &#183; tables &#183; lineage &#183; permissions</text>
+</svg>

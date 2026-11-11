@@ -1,0 +1,7 @@
+domain:
+  name: catalog_explorer
+  catalog: "${var.catalog}"
+  schema: "${var.schema_prefix}"
+  source_filter:
+    table_catalog: "system"
+    table_schema: "information_schema"

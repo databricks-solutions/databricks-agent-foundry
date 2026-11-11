@@ -1,0 +1,39 @@
+questions:
+  # Happy path: user pastes raw SQL and asks to run it.
+  # NOTE: no expected_output_contains for SQL keywords -- the agent must
+  # NOT echo SQL in chat; the rendered tool-call input is the only place
+  # SQL should appear.
+  - input: "Run this for me: SELECT COUNT(*) FROM system.information_schema.tables"
+    expected_tools:
+      - sql-runner   # lazy-mode skill_id; eager-mode also matches sql_warehouse__execute_statement substring
+
+  # Edge case: query that catalog_genie cannot express (window function),
+  # the agent should draft SQL and use sql-runner.  Routing-only check:
+  # the SQL itself lives in the tool input pane, not in chat output.
+  - input: "Across all catalogs, give me the rolling 30-day count of new tables per schema using a window function."
+    expected_tools:
+      - sql-runner
+
+  # Negative case: pure metadata question -- should NOT route to sql-runner.
+  - input: "How many tables are in system.information_schema?"
+    expected_tools:
+      - catalog-explorer   # belongs to catalog-explorer (Genie path), not sql-runner
+    expected_output_contains:
+      - "tables"
+
+  # Knowledge / activation question: confirms skill body was loaded
+  # (lazy mode regression check).  Passes if the agent acknowledges
+  # it can run SQL when asked, without actually executing anything.
+  - input: "When should I ask you to run raw SQL versus letting Genie answer?"
+    expected_tools: []
+    expected_output_contains:
+      - "Genie"
+
+  # Exploration discipline: a "show me what's in" prompt should produce
+  # a bounded query with LIMIT (default 10 for "what's in" / sample
+  # intents) rather than dumping the full table into chat.  The LIMIT
+  # is enforced via Exploration discipline in SKILL.md and shows up in
+  # the rendered SQL input; we only assert routing here.
+  - input: "Show me what's in samples.tpch.customer"
+    expected_tools:
+      - sql-runner

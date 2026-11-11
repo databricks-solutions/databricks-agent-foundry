@@ -1,0 +1,5 @@
+# Unity Gateway brick: every folder under skills/ is deployed as a Unity
+# Catalog skill into this schema (created when missing).  The agent pins
+# them in payloads/agent/payload.yml with the same placeholders.
+skills:
+  schema: "${var.catalog}.${var.schema_prefix}_skills"

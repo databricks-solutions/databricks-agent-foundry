@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../../../../../../.agent-foundry/schemas/mcp_server_config.schema.json
+#
+# Agent attachment for the API named ``example_api`` in the paired
+# rest_mcp payload manifest. Keep the directory/API name and variable suffix
+# aligned if you rename it.
+type: external
+connection_name: "${var.rest_mcp_connection__example_api}"
+description: "Example REST API exposed through the rest_mcp proxy."
+
+tools:
+  # Every callable tool must be explicitly allow-listed.
+  allow:
+    - get_item
+  # Optional prefix for avoiding collisions with tools from other servers.
+  # name_prefix: "example_api__"

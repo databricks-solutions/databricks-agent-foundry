@@ -1,0 +1,55 @@
+{
+  "_comment": "Override of e2e-chatbot-app-next/packages/core/package.json. ADDITIVE-ONLY policy, same as client/package.json: this file is overwritten wholesale by _apply_overrides() at runtime, so it must mirror upstream at UPSTREAM_TEMPLATE_SHA (see bricks/app/scripts/start_app.py and overrides/MANIFEST.md). Feature PRs only ADD entries; never remove upstream ones. When bumping UPSTREAM_TEMPLATE_SHA, re-seed this file from upstream at the new SHA in the same PR.",
+  "name": "@chat-template/core",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./errors": "./src/errors.ts",
+    "./chat-socket-protocol": "./src/chat-socket-protocol.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "import": {
+          "types": "./dist/index.d.ts",
+          "default": "./dist/index.js"
+        },
+        "require": {
+          "types": "./dist/index.d.ts",
+          "default": "./dist/index.cjs"
+        }
+      },
+      "./errors": {
+        "import": {
+          "types": "./dist/errors.d.ts",
+          "default": "./dist/errors.js"
+        },
+        "require": {
+          "types": "./dist/errors.d.ts",
+          "default": "./dist/errors.cjs"
+        }
+      }
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "ai": "^6.0.70",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@chat-template/ai-sdk-providers": "*",
+    "@chat-template/db": "*",
+    "@chat-template/utils": "*",
+    "date-fns": "^4.1.0",
+    "zod": "^4.3.5"
+  }
+}

@@ -1,0 +1,46 @@
+# MCP Server: catalog_functions (managed_functions)
+# ==================================================
+# Surfaces the UC SQL functions deployed by sql_functions/catalog_utils/
+# (currently just `format_byte_size`) through the Databricks Managed
+# Functions MCP server.  Replaces the legacy `type: uc_function`
+# direct-SDK skill tools.
+#
+# URL pattern: {host}/api/2.0/mcp/functions/{catalog}/{schema}
+# The schema must match where the functions live: the agent schema
+# auto-computed by InstanceConfig as ${var.catalog}.${var.schema_prefix}_agent
+# (the same schema sql_functions/catalog_utils/config.yml deploys to).
+
+type: managed_functions
+description: >
+  Deterministic UC SQL helper functions for the portfolio-assistant
+  agent.  Currently exposes format_byte_size for human-readable
+  rendering of integer byte counts from information_schema queries.
+
+catalog: "${var.catalog}"
+schema: "${var.schema_prefix}_agent"
+
+# ---------------------------------------------------------------------------
+# Tools
+# ---------------------------------------------------------------------------
+# Discovered via `agent-foundry brick mcp inspect catalog_functions
+# --instance portfolio-assistant --target dev`.  Managed Functions
+# exposes one tool per UC function with a fully-qualified upstream
+# name embedding catalog and schema:
+#   - <catalog>__<schema>__format_byte_size
+#
+# The catalog and schema slugs change between deploys (catalog is
+# parameterised on ${var.catalog}, schema is the agent schema), so we
+# tail-glob the upstream name and rename to a stable alias.  LLM sees
+# `catalog_functions__format_byte_size`.
+#
+# get_data_landscape is deliberately absent from this list. It is read by
+# the runtime and injected into the system prompt
+# (spec.runtime.context.data_universe), so exposing it as a tool as well
+# would just invite the agent to fetch what it already has -- which is
+# the 16K-token-per-conversation habit the injection exists to remove.
+tools:
+  allow:
+    - match: "*__*__format_byte_size"
+      expose_as: format_byte_size
+    - match: "*__*__get_table_metadata"
+      expose_as: get_table_metadata

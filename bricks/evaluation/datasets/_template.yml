@@ -1,0 +1,72 @@
+# Evaluation Dataset Template
+# ============================
+# Copy this file into your instance's evaluation/datasets/ directory
+# and populate with real test cases for your agent.
+#
+# Format matches mlflow.genai.evaluate() data schema:
+#   - inputs:  dict passed to predict_fn (direct mode) or matched to traces
+#     - question: the user message sent to the agent (required)
+#     - custom_inputs: optional mapping sent as ResponsesAgentRequest.custom_inputs
+#     - context: optional mapping sent as ResponsesAgentRequest.context
+#       (e.g. {conversation_id: ..., user_id: ...})
+#   - expectations: optional ground truth for scorers that need it
+#     - expected_tools: list of tool name substrings for routing scorer
+#     - expected_sql: SQL string for genie accuracy scorer
+#     - expected_response: text for Correctness judge
+#
+# Guidelines:
+#   - Aim for 20-50 questions covering common query patterns
+#   - Mix questions that route to different tools (Genie, Vector Search, etc.)
+#   - Include edge cases: ambiguous queries, multi-tool queries, out-of-scope
+#   - Keep expected_sql scoped with WHERE filters so they execute quickly
+
+dataset:
+  # --- Routing evaluation ---
+  - inputs:
+      question: "How many tables are in the catalog?"
+    expectations:
+      expected_tools: ["genie"]
+      expected_sql: |
+        SELECT COUNT(DISTINCT table_name) AS table_count
+        FROM system.information_schema.tables
+
+  - inputs:
+      question: "What is our data governance policy?"
+    expectations:
+      expected_tools: ["vector_search"]
+
+  # --- End-to-end quality ---
+  - inputs:
+      question: "Show me the top 5 largest tables by row count"
+    expectations:
+      expected_tools: ["genie"]
+
+  - inputs:
+      question: "Summarize the key findings from the quarterly report"
+    expectations:
+      expected_tools: ["vector_search"]
+
+  # --- Multi-tool routing ---
+  - inputs:
+      question: "Compare the data in our catalog with what the documentation says"
+    expectations:
+      expected_tools: ["genie", "vector_search"]
+
+  # --- Edge cases ---
+  - inputs:
+      question: "Hello"
+    expectations:
+      expected_tools: []
+
+  # --- Request-level inputs ---
+  # custom_inputs / context are forwarded to the agent as-is (no ${var.*}
+  # templating). Use them to seed request-level state the agent reads.
+  - inputs:
+      question: "Answer in one sentence: what does this agent do?"
+      custom_inputs:
+        user_preferences:
+          tone: concise
+      context:
+        conversation_id: eval-template-1
+    expectations:
+      expected_tools: []

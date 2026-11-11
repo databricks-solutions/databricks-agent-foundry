@@ -1,0 +1,4 @@
+# Goes through the sql-runner skill and the sql_warehouse MCP.
+questions:
+  - question: "Use the SQL tool to run SELECT 42 AS answer and tell me the value."
+    expect_contains: ["42"]

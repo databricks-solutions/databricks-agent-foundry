@@ -1,0 +1,24 @@
+{
+  "description": "Contents of ``skills/<domain>/domain.yml``.",
+  "properties": {
+    "business_process": {
+      "default": "",
+      "title": "Business Process",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "SkillDomainMetadata",
+  "type": "object"
+}

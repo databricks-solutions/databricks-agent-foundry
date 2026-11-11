@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=../../../../.agent-foundry/schemas/rest_mcp_payload.schema.json
+#
+# REST MCP payload
+# =================
+# One Databricks App can expose several REST APIs as separate MCP servers.
+# Each API receives a governed UC connection named by the deploy output
+# ``rest_mcp_connection__<api-name>``.
+payload:
+  adapter: rest_mcp
+  # No tracing/observability -- this payload does not run an agent.
+  requires: []
+  spec:
+    apis:
+      - name: example_api
+        rest:
+          # HTTPS is mandatory, and the upstream host must be allow-listed.
+          base_url: "https://api.example.com"
+          allowed_hosts: ["api.example.com"]
+          auth:
+            # Public API. For bearer/API-key auth, use ``mode: static`` with
+            # secret_scope/secret_key and optional header/value_prefix.
+            # Use ``mode: obo`` only for Databricks-ecosystem upstreams.
+            mode: none
+          defaults:
+            timeout_s: 30
+            max_response_bytes: 100000
+
+        tools:
+          - name: get_item
+            description: "Fetch an item by id."
+            # Required for POST/PUT/PATCH/DELETE; forbidden for GET.
+            # mutating: true
+            request:
+              method: GET
+              path: "/items/{item_id}"
+              args:
+                - name: item_id
+                  in: path
+                  type: string
+                  required: true
+                  description: "Item identifier."
+              # For shaped request bodies, add body args and a restricted
+              # ``body_template`` using ``{{arg_name}}`` placeholders.
+              # body_template: '{"item": "{{item}}"}'
+              # input_schema: {}
+            response:
+              # Omit ``project`` to return the complete byte-capped response.
+              project: ["id", "name", "status"]
+
+        # Tier-3 escape hatch for tools that need custom Python logic. Module
+        # paths are instance-relative and receive the guarded HTTP client.
+        # code_tools:
+        #   - module: "payloads/rest_mcp/tools/example.py"
+
+        # Optional Unity AI Gateway governance layer (Beta). The external UC
+        # connection remains usable if the preview is unavailable.
+        # mcp_service:
+        #   enabled: true
+        #   catalog: "${var.catalog}"
+        #   schema: "${var.schema_prefix}_rest_mcp"
+        #   include_tool_selectors: ["get_*"]
+        #   service_policies: []
+        #   rate_limits: []
+        #   grants:
+        #     execute: []

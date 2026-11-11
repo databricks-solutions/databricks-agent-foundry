@@ -1,0 +1,11 @@
+filters: []
+expressions: []
+measures:
+  - alias: "table_count"
+    sql: "COUNT(DISTINCT `${var.domain}_catalog_objects`.`table_full_name`)"
+    display_name: "table count"
+    synonyms: ["number of tables", "total tables"]
+  - alias: "column_count"
+    sql: "COUNT(`${var.domain}_catalog_objects`.`column_name`)"
+    display_name: "column count"
+    synonyms: ["number of columns", "total columns"]

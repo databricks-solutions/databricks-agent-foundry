@@ -1,0 +1,111 @@
+# yaml-language-server: $schema=../../../../.agent-foundry/schemas/agent_payload.schema.json
+#
+# Agent payload for unity-gateway-assistant
+# =========================================
+# The full-feature example: most MCP, skill, context and UI options are on.
+#
+# - Model: Claude Sonnet 5.5 as a Unity Gateway ``model_service``; deploy
+#   grants the App EXECUTE on it.
+# - MCP: Unity Gateway services -- web search as the App, Genie One as the
+#   signed-in user -- next to a workspace server (mcp_servers/sql_warehouse/,
+#   read-only SQL as the user).  Workspace tool names win a collision.
+#   Users add more ``system.ai`` services (GitHub, Slack, Gmail, ...) from
+#   the resources panel; those run as the user.
+# - Skills: the git-managed ``sql-runner`` skill the ai_gateway brick
+#   deploys from ai_gateway/skills/.  With
+#   ``skills.repository.enabled: false`` there is no skills/ tree; deploy
+#   rejects one if present.  Users write, edit and pick their own skills
+#   in the resources panel; they are stored per user in the chat-history
+#   Lakebase (``user_skills`` below).
+# - Context: prompt cache, tool-result clearing, compaction, plan and memory.
+#
+# Deploy grants the App's service principal EXECUTE on sp-pinned services
+# and READ_VOLUME on sp-pinned skills outside the platform-managed
+# ``system`` catalog, which needs no grant.
+payload:
+  adapter: agent
+  requires: [warehouse, tracing, observability]
+  spec:
+    runtime:
+      model:
+        kind: model_service
+        name: "system.ai.claude-sonnet-5-5"
+      system_prompt: |
+        You are a research assistant. Use the web search tool for anything that
+        depends on current or external information, and cite each source as a
+        Markdown link next to the claim it supports. For questions about data
+        in Databricks, ask Genie or run read-only SQL. Be concise: lead with
+        the answer, then supporting detail.
+      # Genie and SQL answer asynchronously: one ask plus a few polls.
+      max_tool_calls_per_turn: 10
+      max_iterations: 10
+      tools:
+        mcp:
+          gateway:
+            pinned:
+              - fqn: "system.ai.web_search"
+                identity: sp
+              # Reads data, so it runs as the user and sees only what they may.
+              - fqn: "system.ai.genie_one_mcp"
+                identity: obo
+            # Users add the other system.ai services in the resources panel.
+            # Each runs as the user, so it sees only that user's accounts.
+            # No ``discovery`` block: it would mount them as the App instead.
+            user_catalog:
+              enabled: true
+              locations: ["system.ai"]
+        skills:
+          repository:
+            enabled: false
+          unity_catalog:
+            pinned:
+              # Same schema as ai_gateway/config.yml.  Keeps sql_warehouse
+              # results small (LIMIT, no SELECT *).
+              - fqn: "${var.catalog}.${var.schema_prefix}_skills.sql-runner"
+                identity: sp
+          # Not store: unity_catalog: inside Databricks Apps the user token
+          # lacks the unity-catalog scope the skills API needs.
+          user_skills:
+            enabled: true
+            store: lakebase
+      context:
+        prompt_cache:
+          enabled: true
+          static_ttl: "1h"
+        tool_result_clearing:
+          enabled: true
+          keep_tool_uses: 3
+          clear_at_least_chars: 300000
+          clear_above_input_tokens: 150000
+        compaction:
+          keep_recent_turns: 3
+          manual_action: true
+        plan:
+          enabled: true
+        # Kept per user in the chat-history Lakebase.
+        memory:
+          enabled: true
+      # Claude 5.x rejects thinking: enabled / disabled; effort scales it.
+      reasoning:
+        thinking: adaptive
+        effort: medium
+        display: summarized
+        emit: true
+    ui:
+      enabled: true
+      kind: chat
+      chat_history:
+        enabled: true
+        sidebar_days: 30
+        retention_days: 365
+      file_upload:
+        enabled: true
+        images: true
+      feedback:
+        enabled: true
+      charts:
+        enabled: true
+      tool_output:
+        expanded: false
+      resources_sidebar:
+        enabled: true

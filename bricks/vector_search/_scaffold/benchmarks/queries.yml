@@ -1,0 +1,26 @@
+# Benchmark Queries
+# =================
+# Test queries to validate index quality after deployment.
+# Used by the deploy script's --run-benchmarks flag and CI integration tests.
+#
+# For Delta Sync indexes with embedding_source_columns, use query_text.
+# For Direct Access or self-managed vectors, use query_vector.
+
+queries:
+  - question: "What is Unity Catalog?"
+    query_text: "What is Unity Catalog and how does it provide governance?"
+    columns: ["id", "content", "source"]
+    num_results: 5
+    expect_min_results: 1
+
+  - question: "How does Delta Lake work?"
+    query_text: "Delta Lake storage layer ACID transactions"
+    columns: ["id", "content", "source"]
+    num_results: 5
+    expect_min_results: 1
+
+  - question: "Databricks SQL capabilities"
+    query_text: "serverless data warehouse on the Lakehouse"
+    columns: ["id", "content", "source"]
+    num_results: 3
+    expect_min_results: 1

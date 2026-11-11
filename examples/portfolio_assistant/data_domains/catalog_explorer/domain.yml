@@ -1,0 +1,11 @@
+# Data Domain: catalog_explorer
+# ===============================
+# Curated views on system.information_schema for the Genie Space.
+
+domain:
+  name: catalog_explorer
+  catalog: "${var.catalog}"
+  schema: "${var.schema_prefix}_views"
+  source_filter:
+    table_catalog: "system"
+    table_schema: "information_schema"

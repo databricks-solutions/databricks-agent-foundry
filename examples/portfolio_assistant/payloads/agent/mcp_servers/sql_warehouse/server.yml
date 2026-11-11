@@ -1,0 +1,49 @@
+# MCP Server: sql_warehouse (managed_sql)
+# ========================================
+# Ad-hoc SQL execution against the dedicated portfolio-assistant
+# warehouse provisioned by the warehouse/ brick.
+#
+# This is the "raw query" escape hatch -- the agent should prefer
+# the catalog_genie MCP server for natural-language metadata
+# questions and only fall back to sql_warehouse for queries Genie
+# cannot express (custom JOINs, aggregations across catalogs, etc.).
+# The skill in skills/sql-runner/SKILL.md enforces that
+# routing convention.
+#
+# URL pattern: {host}/api/2.0/mcp/sql
+# Authentication: app SP by default; OBO when the request carries
+# an x-forwarded-access-token (see app/app.yaml).
+
+type: managed_sql
+description: >
+  Ad-hoc SQL execution against the dedicated portfolio-assistant
+  SQL warehouse. Use for queries that Genie cannot express; prefer
+  catalog_genie for natural-language metadata questions.
+
+# ---------------------------------------------------------------------------
+# Tools
+# ---------------------------------------------------------------------------
+# Discovered via `agent-foundry brick mcp inspect sql_warehouse
+# --instance portfolio-assistant --target dev`.  Managed SQL exposes
+# three tools:
+#   - execute_sql            (destructive; INSERT/UPDATE/DROP allowed)
+#   - execute_sql_read_only  (read-only SELECT only)
+#   - poll_sql_result        (polls long-running queries by statement id)
+#
+# We narrow the allow-list to the read-only pair so the LLM cannot
+# mutate state from the chat surface.
+# Both names are already short and self-explanatory, so no expose_as
+# rename is needed -- bare-string entries keep the upstream names
+# verbatim and the LLM sees `sql_warehouse__execute_sql_read_only`
+# and `sql_warehouse__poll_sql_result`.
+tools:
+  allow:
+    - execute_sql_read_only
+    - poll_sql_result
+  # default_meta is forwarded as the JSON-RPC `_meta` field on every
+  # call_tool invocation.  The dedicated warehouse_id resolves at
+  # deploy time from the warehouse brick's state (published as
+  # ${var.warehouse_id} by the warehouse brick's load_state_outputs).
+  default_meta:
+    warehouse_id: "${var.warehouse_id}"
+

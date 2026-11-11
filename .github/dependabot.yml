@@ -1,0 +1,69 @@
+# Dependabot configuration.
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Goal: keep the security-alert volume manageable. Most open alerts are
+# transitive Python deps captured in uv.lock (dev/CI/optional extras).
+# App-container pins are regenerated from that lock into
+# agent_foundry/constraints/*.txt (not a root requirements.txt).
+# Grouping collapses the one-PR-per-advisory firehose into a single
+# batched PR per ecosystem so reviewers triage once instead of per-package.
+version: 2
+
+# Package index Dependabot resolves Python deps against: public PyPI.
+# Change the url below if your fork uses its own mirror.
+registries:
+  python-proxy:
+    type: python-index
+    url: https://pypi.org/simple
+    replaces-base: true
+
+updates:
+  # ---------------------------------------------------------------------
+  # Python -- the "uv" ecosystem covers pyproject.toml and uv.lock.
+  # ---------------------------------------------------------------------
+  - package-ecosystem: "uv"
+    directory: "/"
+    registries:
+      - python-proxy
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 0  # off upstream; raise it in your fork
+    labels:
+      - "dependencies"
+    groups:
+      # One batched PR for all security fixes instead of one per advisory.
+      python-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      # Routine version bumps batched and capped to minor/patch to avoid
+      # surprise breaking changes landing automatically.
+      python-version:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------
+  # GitHub Actions pinned in .github/workflows (ci.yml, acceptance.yml).
+  # ---------------------------------------------------------------------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 0  # off upstream; raise it in your fork
+    labels:
+      - "dependencies"
+    groups:
+      # Cap to minor/patch so major action bumps (which can change runtime
+      # or workflow behaviour) are reviewed/applied manually, not auto-opened.
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

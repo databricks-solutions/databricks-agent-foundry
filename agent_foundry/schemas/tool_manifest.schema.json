@@ -1,0 +1,257 @@
+{
+  "$defs": {
+    "GenieTool": {
+      "description": "A Genie space tool. ``space_id`` is injected by the assembler.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "space_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Space Id"
+        },
+        "type": {
+          "const": "genie",
+          "default": "genie",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "title": "GenieTool",
+      "type": "object"
+    },
+    "MCPTool": {
+      "description": "A reference to a tool exposed by a registered MCP server.\n\nCarries only ``name`` + ``description``. The skills validator\nresolves the name at validate-time against the union of allow-lists\ndeclared in ``instances/<app>/payloads/agent/mcp_servers/<name>/server.yml``;\nunresolved names are a validation error with a \"did you forget to\nregister the MCP server?\" hint.\n\nYAML entries that omit ``type:`` entirely are normalised to\n``type: mcp`` by the assembler / validator before this model sees\nthem, so authors can write the minimal shape::\n\n    tools:\n      - name: search_issues\n        description: \"...\"",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "const": "mcp",
+          "default": "mcp",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "title": "MCPTool",
+      "type": "object"
+    },
+    "PythonFunctionTool": {
+      "description": "A plain in-process Python callable, invoked directly by the agent\nruntime (no MCP / Genie / Vector Search / UC transport).\n\nThis is an **instance-author primitive**, not a skill-catalog or\nend-user primitive: ``callable_path`` is config authored in the\ninstance repo and is never derived from chat input, end users, or a\nshared skill catalog.\n\n``callable_path`` is a dotted import path to a module-level callable,\ne.g. ``\"my_pkg.my_module.my_func\"``, and must resolve to instance code\nunder ``instances/<name>/`` (the only tree the deploy staging ships\nalongside the framework wheel).  The runtime enforces this fail-closed\nat load: a path to an installed or stdlib module, or a callable\nre-exported from one, is rejected and the tool is skipped.\n\nKeep the callable to in-memory compute and route I/O (SQL, network,\nUC) through an MCP server.  The load check guarantees only\ninstance-authored code runs; ambient I/O inside that code is not\nblocked in-process and is part of the instance-author contract.\n\nA leading parameter named ``state`` receives the request-scoped\n``RequestState`` (the only supported per-request accumulator) and is\nnot exposed as an LLM argument.\n\n``params_json_schema`` is the JSON Schema for the tool's arguments.\nWhen omitted, the runtime infers a primitives-only schema from the\ncallable's signature (see\n``payloads.agent.runtime.tools._infer_params_schema``); pass an\nexplicit schema (e.g. from a Pydantic model's ``model_json_schema()``)\nfor anything richer than ``str`` / ``int`` / ``float`` / ``bool`` args.\n\nUnlike the MCP-served tool types, this is a *direct-mode* tool that\nstays in ``SKILL_TOOLS`` and is attached by the runtime regardless of\nthe ``mcp_only`` flag (it is first-party in-process code, not the\nlegacy direct-mode Genie / Vector Search that flag gates).",
+      "properties": {
+        "callable_path": {
+          "title": "Callable Path",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "params_json_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Params Json Schema"
+        },
+        "type": {
+          "const": "python",
+          "default": "python",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "callable_path"
+      ],
+      "title": "PythonFunctionTool",
+      "type": "object"
+    },
+    "UCFunctionTool": {
+      "description": "A Unity Catalog function tool. ``function_name`` is the fully\nqualified ``<catalog>.<schema>.<function>`` path (or a\n``${var.<x>}`` template resolved by the variable substituter).",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "function_name": {
+          "title": "Function Name",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "const": "uc_function",
+          "default": "uc_function",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "function_name"
+      ],
+      "title": "UCFunctionTool",
+      "type": "object"
+    },
+    "VectorSearchTool": {
+      "description": "A Vector Search index tool. ``index_name`` / ``endpoint_name`` are\ninjected by the assembler when omitted.",
+      "properties": {
+        "columns": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "endpoint_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpoint Name"
+        },
+        "index_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Index Name"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "num_results": {
+          "default": 10,
+          "title": "Num Results",
+          "type": "integer"
+        },
+        "query_type": {
+          "default": "HYBRID",
+          "title": "Query Type",
+          "type": "string"
+        },
+        "score_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score Threshold"
+        },
+        "type": {
+          "const": "vector_search",
+          "default": "vector_search",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "title": "VectorSearchTool",
+      "type": "object"
+    }
+  },
+  "description": "Top-level shape of a ``tools.yml`` file.",
+  "properties": {
+    "tools": {
+      "default": [],
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "genie": "#/$defs/GenieTool",
+            "mcp": "#/$defs/MCPTool",
+            "python": "#/$defs/PythonFunctionTool",
+            "uc_function": "#/$defs/UCFunctionTool",
+            "vector_search": "#/$defs/VectorSearchTool"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/GenieTool"
+          },
+          {
+            "$ref": "#/$defs/VectorSearchTool"
+          },
+          {
+            "$ref": "#/$defs/UCFunctionTool"
+          },
+          {
+            "$ref": "#/$defs/PythonFunctionTool"
+          },
+          {
+            "$ref": "#/$defs/MCPTool"
+          }
+        ]
+      },
+      "title": "Tools",
+      "type": "array"
+    }
+  },
+  "title": "ToolManifest",
+  "type": "object"
+}

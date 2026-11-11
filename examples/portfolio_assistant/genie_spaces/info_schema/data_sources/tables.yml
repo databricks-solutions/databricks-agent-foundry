@@ -1,0 +1,32 @@
+# Curated views deployed by the catalog_explorer data domain.
+# The denormalized catalog_objects view has the join baked in,
+# so no join_specs are needed.
+
+tables:
+  - identifier: "${var.catalog}.${var.schema_prefix}_views.${var.domain}_catalog_objects"
+    description: "Flat view of all tables and their columns, pre-joined. Each row = one column in one table."
+    column_configs:
+      - column_name: data_type
+        enable_entity_matching: true
+        enable_format_assistance: true
+      - column_name: is_nullable
+        enable_entity_matching: true
+      - column_name: table_type
+        enable_entity_matching: true
+        enable_format_assistance: true
+      - column_name: table_catalog
+        enable_format_assistance: true
+      - column_name: table_schema
+        enable_format_assistance: true
+      - column_name: table_name
+        enable_format_assistance: true
+      - column_name: is_view
+        enable_entity_matching: true
+
+  - identifier: "${var.catalog}.${var.schema_prefix}_views.${var.domain}_schema_summary"
+    description: "Aggregated statistics per schema: table counts, column counts, type breakdowns. One row per schema."
+    column_configs:
+      - column_name: table_catalog
+        enable_format_assistance: true
+      - column_name: table_schema
+        enable_format_assistance: true

@@ -1,0 +1,12 @@
+{
+  "name": "agent-bricks-agent-app-ts-tests",
+  "private": true,
+  "description": "Standalone harness for unit-testing the TypeScript helpers that the agent payload UI overlays onto the upstream e2e-chatbot-app-next chat UI. Lives outside payloads/agent/ui/overrides/ on purpose: _apply_overrides() in bricks/app/scripts/start_app.py rsyncs the entire overrides/ tree into the cloned upstream checkout, and a stray package.json under overrides/server/ would clobber upstream's @databricks/chatbot-server workspace declaration (regression caught in PR #298 follow-up). Test files import the helpers directly from ../../overrides/server/src/lib/ via relative paths.",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --import ./support/upstream-stubs.mjs --test ./*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0"
+  }
+}

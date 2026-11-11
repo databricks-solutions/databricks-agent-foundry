@@ -1,0 +1,1792 @@
+{
+  "datasets": [
+    {
+      "name": "ds_request_volume",
+      "displayName": "Request Volume",
+      "queryLines": [
+        "WITH date_spine AS ( ",
+        "  SELECT EXPLODE(SEQUENCE(CAST(:time_range.min AS DATE), CAST(:time_range.max AS DATE), INTERVAL 1 DAY)) AS request_date ",
+        "), ",
+        "daily AS ( ",
+        "  SELECT DATE_TRUNC('DAY', request_time) AS request_date, COUNT(*) AS request_count ",
+        "  FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "  WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "  GROUP BY 1 ",
+        ") ",
+        "SELECT d.request_date, COALESCE(t.request_count, 0) AS request_count ",
+        "FROM date_spine d LEFT JOIN daily t ON d.request_date = t.request_date ",
+        "ORDER BY d.request_date"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_latency",
+      "displayName": "Latency Distribution",
+      "queryLines": [
+        "WITH date_spine AS ( ",
+        "  SELECT EXPLODE(SEQUENCE(CAST(:time_range.min AS DATE), CAST(:time_range.max AS DATE), INTERVAL 1 DAY)) AS request_date ",
+        "), ",
+        "daily AS ( ",
+        "  SELECT DATE_TRUNC('DAY', request_time) AS request_date, ",
+        "    ROUND(PERCENTILE_APPROX(CAST(execution_duration_ms AS DOUBLE), 0.5) / 1000, 1) AS latency_p50_s, ",
+        "    ROUND(PERCENTILE_APPROX(CAST(execution_duration_ms AS DOUBLE), 0.95) / 1000, 1) AS latency_p95_s, ",
+        "    ROUND(PERCENTILE_APPROX(CAST(execution_duration_ms AS DOUBLE), 0.99) / 1000, 1) AS latency_p99_s ",
+        "  FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "  WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "  GROUP BY 1 ",
+        ") ",
+        "SELECT d.request_date, COALESCE(t.latency_p50_s, 0) AS latency_p50_s, ",
+        "  COALESCE(t.latency_p95_s, 0) AS latency_p95_s, COALESCE(t.latency_p99_s, 0) AS latency_p99_s ",
+        "FROM date_spine d LEFT JOIN daily t ON d.request_date = t.request_date ",
+        "ORDER BY d.request_date"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_error_rate",
+      "displayName": "Error Rate",
+      "queryLines": [
+        "SELECT ",
+        "  DATE_TRUNC('DAY', request_time) AS request_date, ",
+        "  COUNT(*) AS total_requests, ",
+        "  SUM(CASE WHEN state != 'OK' THEN 1 ELSE 0 END) AS error_count, ",
+        "  ROUND(SUM(CASE WHEN state != 'OK' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS error_rate_pct ",
+        "FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "GROUP BY 1 ",
+        "ORDER BY request_date"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_tool_calls",
+      "displayName": "Tool Call Breakdown",
+      "queryLines": [
+        "WITH date_spine AS ( ",
+        "  SELECT EXPLODE(SEQUENCE(CAST(:time_range.min AS DATE), CAST(:time_range.max AS DATE), INTERVAL 1 DAY)) AS request_date ",
+        "), ",
+        "tool_spans AS ( ",
+        "  SELECT DATE_TRUNC('DAY', request_time) AS request_date, ",
+        "    CASE WHEN CAST(span.attributes:['mlflow.spanType'] AS STRING) = 'TOOL' THEN ",
+        "      COALESCE(GET_JSON_OBJECT(CAST(span.attributes:['mlflow.spanInputs'] AS STRING), '$.tool_name'), span.name) ",
+        "    ELSE span.name END AS raw_tool_name ",
+        "  FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "  LATERAL VIEW EXPLODE(spans) AS span ",
+        "  WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "    AND CAST(span.attributes:['mlflow.spanType'] AS STRING) IN ('TOOL', 'RETRIEVER') ",
+        "), ",
+        "normalised AS ( ",
+        "  SELECT request_date, CASE ",
+        "    WHEN raw_tool_name LIKE 'query_space_%' THEN 'genie_query' ",
+        "    WHEN raw_tool_name LIKE 'poll_response_%' THEN 'genie_poll' ",
+        "    ELSE REPLACE(raw_tool_name, '__', '.') END AS tool_name ",
+        "  FROM tool_spans WHERE raw_tool_name IS NOT NULL ",
+        "), ",
+        "tools AS (SELECT DISTINCT tool_name FROM normalised), ",
+        "grid AS (SELECT d.request_date, t.tool_name FROM date_spine d CROSS JOIN tools t), ",
+        "daily AS (SELECT request_date, tool_name, COUNT(*) AS call_count FROM normalised GROUP BY 1, 2) ",
+        "SELECT g.request_date, g.tool_name, COALESCE(d.call_count, 0) AS call_count ",
+        "FROM grid g LEFT JOIN daily d ON g.request_date = d.request_date AND g.tool_name = d.tool_name ",
+        "ORDER BY g.request_date, g.tool_name"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_quality_scores",
+      "displayName": "Quality Scores",
+      "queryLines": [
+        "SELECT ",
+        "  DATE_TRUNC('DAY', a.last_update_time) AS score_date, ",
+        "  a.assessment_name AS scorer, ",
+        "  AVG(CASE WHEN a.feedback.value IN ('true', 'yes') THEN 1.0 ",
+        "    WHEN a.feedback.value IN ('false', 'no') THEN 0.0 ",
+        "    ELSE TRY_CAST(a.feedback.value AS DOUBLE) END) AS avg_score, ",
+        "  COUNT(*) AS sample_count ",
+        "FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_metadata ",
+        "LATERAL VIEW EXPLODE(assessments) AS a ",
+        "WHERE (DATE(a.last_update_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "  AND a.source.source_type = 'CODE' ",
+        "GROUP BY 1, 2 ",
+        "ORDER BY score_date, scorer"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_human_feedback",
+      "displayName": "Human Feedback",
+      "queryLines": [
+        "SELECT feedback_date, sentiment, feedback_count ",
+        "FROM ( ",
+        "  SELECT ",
+        "    DATE_TRUNC('DAY', a.last_update_time) AS feedback_date, ",
+        "    SUM(CASE WHEN a.feedback.value IN ('true', 'yes', 'thumbs_up', '1') THEN 1 ELSE 0 END) AS Positive, ",
+        "    SUM(CASE WHEN a.feedback.value IN ('false', 'no', 'thumbs_down', '0') THEN 1 ELSE 0 END) AS Negative ",
+        "  FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_metadata ",
+        "  LATERAL VIEW EXPLODE(assessments) AS a ",
+        "  WHERE (DATE(a.last_update_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "    AND a.source.source_type = 'HUMAN' ",
+        "  GROUP BY 1 ",
+        ") ",
+        "UNPIVOT ( ",
+        "  feedback_count FOR sentiment IN (Positive, Negative) ",
+        ") ",
+        "ORDER BY feedback_date, sentiment"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_cost",
+      "displayName": "Cost Attribution",
+      "queryLines": [
+        "SELECT ",
+        "  usage_date, ",
+        "  billing_origin_product AS resource_type, ",
+        "  sku_name, ",
+        "  SUM(usage_quantity) AS total_dbu ",
+        "FROM system.billing.usage ",
+        "WHERE (usage_date BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "  AND ( ",
+        "    usage_metadata.app_name IN ('${var.app_resource_name}', '${var.app_name}') ",
+        "    OR usage_metadata.endpoint_name = '${var.vs_endpoint_name}' ",
+        "    OR usage_metadata.warehouse_id = '${var.warehouse_id}' ",
+        "    OR custom_tags['ai_solution_managed_by'] = '${var.app_name}' ",
+        "  ) ",
+        "GROUP BY 1, 2, 3 ",
+        "ORDER BY usage_date DESC, total_dbu DESC"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_daily_users",
+      "displayName": "Daily Users",
+      "queryLines": [
+        "WITH date_spine AS ( ",
+        "  SELECT EXPLODE(SEQUENCE(CAST(:time_range.min AS DATE), CAST(:time_range.max AS DATE), INTERVAL 1 DAY)) AS request_date ",
+        "), ",
+        "daily AS ( ",
+        "  SELECT DATE_TRUNC('DAY', request_time) AS request_date, ",
+        "    COUNT(DISTINCT COALESCE(trace_metadata:['mlflow.trace.user']::string, trace_metadata:['mlflow.user']::string)) AS unique_users ",
+        "  FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "  WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "  GROUP BY 1 ",
+        ") ",
+        "SELECT d.request_date, COALESCE(t.unique_users, 0) AS unique_users ",
+        "FROM date_spine d LEFT JOIN daily t ON d.request_date = t.request_date ",
+        "ORDER BY d.request_date"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_kpi_users",
+      "displayName": "KPI Unique Users",
+      "queryLines": [
+        "SELECT COUNT(DISTINCT COALESCE(trace_metadata:['mlflow.trace.user']::string, trace_metadata:['mlflow.user']::string)) AS unique_users ",
+        "FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL)"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_kpi_avg_requests_per_user",
+      "displayName": "KPI Avg Requests per User",
+      "queryLines": [
+        "SELECT ROUND(COUNT(trace_id) * 1.0 / NULLIF(COUNT(DISTINCT COALESCE(trace_metadata:['mlflow.trace.user']::string, trace_metadata:['mlflow.user']::string)), 0), 1) AS avg_requests_per_user ",
+        "FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL)"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_kpi_tokens",
+      "displayName": "KPI Token Usage",
+      "queryLines": [
+        "SELECT COALESCE(SUM( ",
+        "  TRY_CAST(GET_JSON_OBJECT(trace_metadata:['mlflow.trace.tokenUsage']::string, '$.total_tokens') AS BIGINT) ",
+        "), 0) AS total_tokens ",
+        "FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL)"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_token_trend",
+      "displayName": "Token Usage Over Time",
+      "queryLines": [
+        "WITH date_spine AS ( ",
+        "  SELECT EXPLODE(SEQUENCE(CAST(:time_range.min AS DATE), CAST(:time_range.max AS DATE), INTERVAL 1 DAY)) AS request_date ",
+        "), ",
+        "daily AS ( ",
+        "  SELECT DATE_TRUNC('DAY', request_time) AS request_date, ",
+        "    SUM(TRY_CAST(GET_JSON_OBJECT(trace_metadata:['mlflow.trace.tokenUsage']::string, '$.input_tokens') AS BIGINT)) AS input_tokens, ",
+        "    SUM(TRY_CAST(GET_JSON_OBJECT(trace_metadata:['mlflow.trace.tokenUsage']::string, '$.output_tokens') AS BIGINT)) AS output_tokens ",
+        "  FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "  WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "  GROUP BY 1 ",
+        ") ",
+        "SELECT d.request_date, COALESCE(t.input_tokens, 0) AS input_tokens, COALESCE(t.output_tokens, 0) AS output_tokens ",
+        "FROM date_spine d LEFT JOIN daily t ON d.request_date = t.request_date ",
+        "ORDER BY d.request_date"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_kpi_requests",
+      "displayName": "KPI Total Requests",
+      "queryLines": [
+        "SELECT COUNT(*) AS total_requests ",
+        "FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL)"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_kpi_latency",
+      "displayName": "KPI Avg Latency",
+      "queryLines": [
+        "SELECT ROUND(AVG(CAST(execution_duration_ms AS DOUBLE)), 0) AS avg_latency_ms ",
+        "FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL)"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_kpi_errors",
+      "displayName": "KPI Error Rate",
+      "queryLines": [
+        "SELECT ROUND(SUM(CASE WHEN state != 'OK' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS error_rate_pct ",
+        "FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL)"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_sessions",
+      "displayName": "Session Activity",
+      "queryLines": [
+        "WITH date_spine AS ( ",
+        "  SELECT EXPLODE(SEQUENCE(CAST(:time_range.min AS DATE), CAST(:time_range.max AS DATE), INTERVAL 1 DAY)) AS request_date ",
+        "), ",
+        "daily AS ( ",
+        "  SELECT DATE_TRUNC('DAY', request_time) AS request_date, ",
+        "    COUNT(DISTINCT trace_metadata:['mlflow.trace.session']::string) AS unique_sessions, ",
+        "    ROUND(COUNT(*) * 1.0 / NULLIF(COUNT(DISTINCT trace_metadata:['mlflow.trace.session']::string), 0), 1) AS avg_traces_per_session ",
+        "  FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "  WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "  GROUP BY 1 ",
+        ") ",
+        "SELECT d.request_date, COALESCE(t.unique_sessions, 0) AS unique_sessions, ",
+        "  COALESCE(t.avg_traces_per_session, 0) AS avg_traces_per_session ",
+        "FROM date_spine d LEFT JOIN daily t ON d.request_date = t.request_date ",
+        "ORDER BY d.request_date"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_top_users",
+      "displayName": "Top Users",
+      "queryLines": [
+        "SELECT ",
+        "  CONCAT('user-', LEFT(SHA2(raw_user, 256), 8)) AS user_id, ",
+        "  COUNT(*) AS request_count, ",
+        "  ROUND(AVG(CAST(execution_duration_ms AS DOUBLE)), 0) AS avg_latency_ms, ",
+        "  COALESCE(SUM(TRY_CAST(GET_JSON_OBJECT(trace_metadata:['mlflow.trace.tokenUsage']::string, '$.total_tokens') AS BIGINT)), 0) AS total_tokens, ",
+        "  MAX(request_time) AS last_active ",
+        "FROM ( ",
+        "  SELECT *, COALESCE(trace_metadata:['mlflow.trace.user']::string, trace_metadata:['mlflow.user']::string) AS raw_user ",
+        "  FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "  WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        ") ",
+        "WHERE raw_user IS NOT NULL ",
+        "GROUP BY 1 ",
+        "ORDER BY request_count DESC"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_prompt_versions",
+      "displayName": "Prompt Versions",
+      "queryLines": [
+        "SELECT ",
+        "  DATE_TRUNC('DAY', request_time) AS request_date, ",
+        "  CONCAT('v', COALESCE(GET_JSON_OBJECT(tags['mlflow.linkedPrompts'], '$[0].version'), '?')) AS prompt_version, ",
+        "  COUNT(*) AS trace_count ",
+        "FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "  AND tags['mlflow.linkedPrompts'] IS NOT NULL ",
+        "GROUP BY 1, 2 ",
+        "ORDER BY request_date, prompt_version"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_model_usage",
+      "displayName": "Model Version Usage",
+      "queryLines": [
+        "SELECT ",
+        "  DATE_TRUNC('DAY', request_time) AS request_date, ",
+        "  COALESCE(trace_metadata:['mlflow.modelId']::string, 'unlinked') AS model_id, ",
+        "  COUNT(*) AS trace_count ",
+        "FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "GROUP BY 1, 2 ",
+        "ORDER BY request_date, model_id"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_feedback_categories",
+      "displayName": "Feedback Categories",
+      "queryLines": [
+        "SELECT TRIM(cat) AS category, COUNT(*) AS count ",
+        "FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_metadata ",
+        "LATERAL VIEW EXPLODE(assessments) AS a ",
+        "LATERAL VIEW EXPLODE(SPLIT(a.feedback.value, ',')) AS cat ",
+        "WHERE a.source.source_type = 'HUMAN' ",
+        "  AND a.assessment_name = 'user_feedback_categories' ",
+        "  AND (DATE(a.last_update_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "GROUP BY 1 ",
+        "ORDER BY count DESC"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_feedback_comments",
+      "displayName": "Feedback Comments",
+      "queryLines": [
+        "SELECT ",
+        "    a.last_update_time AS submitted_at, ",
+        "    SHA2(a.source.source_id, 256) AS user_hash, ",
+        "    a.feedback.value AS comment ",
+        "FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_metadata ",
+        "LATERAL VIEW EXPLODE(assessments) AS a ",
+        "WHERE a.source.source_type = 'HUMAN' ",
+        "  AND a.assessment_name = 'user_feedback_comment' ",
+        "  AND a.feedback.value IS NOT NULL AND TRIM(a.feedback.value) != '' ",
+        "  AND (DATE(a.last_update_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "ORDER BY a.last_update_time DESC ",
+        "LIMIT 100"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_cache_kpis",
+      "displayName": "Token Cache KPIs",
+      "queryLines": [
+        "WITH llm AS ( ",
+        "    SELECT ",
+        "        trace_id, ",
+        "        request_time, ",
+        "        execution_duration_ms, ",
+        "        COALESCE(trace_metadata:['mlflow.trace.user']::string, trace_metadata:['mlflow.user']::string) AS raw_user, ",
+        "        CAST(span.attributes:['mlflow.spanOutputs']:model AS STRING) AS model, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:prompt_tokens AS BIGINT), 0) AS prompt_tokens, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:completion_tokens AS BIGINT), 0) AS output_tokens, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_read_input_tokens AS BIGINT), CAST(span.attributes:['mlflow.chat.tokenUsage']:cache_read_input_tokens AS BIGINT), 0) AS cache_read, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_creation_input_tokens AS BIGINT), CAST(span.attributes:['mlflow.chat.tokenUsage']:cache_creation_input_tokens AS BIGINT), 0) AS cache_write, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_creation:ephemeral_1h_input_tokens AS BIGINT), 0) AS write_1h ",
+        "    FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "    LATERAL VIEW EXPLODE(spans) AS span ",
+        "    WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "      AND span.attributes:['mlflow.chat.tokenUsage'] IS NOT NULL ",
+        "), ",
+        "priced AS ( ",
+        "    SELECT *, ",
+        "        GREATEST(cache_write - write_1h, 0) AS write_5m, ",
+        "        GREATEST(prompt_tokens - cache_read - cache_write, 0) AS uncached ",
+        "    FROM llm ",
+        "), ",
+        "billed AS ( ",
+        "    SELECT *, ",
+        "        0.1 * cache_read + 1.25 * write_5m + 2.0 * write_1h + uncached AS billed_units ",
+        "    FROM priced ",
+        ") ",
+        "SELECT ",
+        "    COALESCE(SUM(prompt_tokens), 0) AS input_tokens, ",
+        "    COALESCE(SUM(output_tokens), 0) AS output_tokens, ",
+        "    ROUND(100.0 * SUM(cache_read) / NULLIF(SUM(prompt_tokens), 0), 1) AS cache_read_pct, ",
+        "    ROUND(100.0 * (1 - SUM(billed_units) / NULLIF(SUM(prompt_tokens), 0)), 1) AS savings_pct, ",
+        "    ROUND(SUM(billed_units) / NULLIF(SUM(prompt_tokens), 0), 3) AS effective_multiplier, ",
+        "    ROUND(100.0 * SUM(CASE WHEN write_1h > 0 THEN 1 ELSE 0 END) / NULLIF(COUNT(DISTINCT trace_id), 0), 1) AS prefix_rebuilds_per_100 ",
+        "FROM billed"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_cache_composition",
+      "displayName": "Input Token Composition",
+      "queryLines": [
+        "WITH llm AS ( ",
+        "    SELECT ",
+        "        trace_id, ",
+        "        request_time, ",
+        "        execution_duration_ms, ",
+        "        COALESCE(trace_metadata:['mlflow.trace.user']::string, trace_metadata:['mlflow.user']::string) AS raw_user, ",
+        "        CAST(span.attributes:['mlflow.spanOutputs']:model AS STRING) AS model, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:prompt_tokens AS BIGINT), 0) AS prompt_tokens, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:completion_tokens AS BIGINT), 0) AS output_tokens, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_read_input_tokens AS BIGINT), CAST(span.attributes:['mlflow.chat.tokenUsage']:cache_read_input_tokens AS BIGINT), 0) AS cache_read, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_creation_input_tokens AS BIGINT), CAST(span.attributes:['mlflow.chat.tokenUsage']:cache_creation_input_tokens AS BIGINT), 0) AS cache_write, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_creation:ephemeral_1h_input_tokens AS BIGINT), 0) AS write_1h ",
+        "    FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "    LATERAL VIEW EXPLODE(spans) AS span ",
+        "    WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "      AND span.attributes:['mlflow.chat.tokenUsage'] IS NOT NULL ",
+        "), ",
+        "priced AS ( ",
+        "    SELECT *, ",
+        "        GREATEST(cache_write - write_1h, 0) AS write_5m, ",
+        "        GREATEST(prompt_tokens - cache_read - cache_write, 0) AS uncached ",
+        "    FROM llm ",
+        "), ",
+        "daily AS ( ",
+        "    SELECT DATE_TRUNC('DAY', request_time) AS request_date, ",
+        "        SUM(cache_read) AS cache_read, ",
+        "        SUM(write_5m) AS write_5m, ",
+        "        SUM(write_1h) AS write_1h, ",
+        "        SUM(uncached) AS uncached ",
+        "    FROM priced ",
+        "    GROUP BY 1 ",
+        ") ",
+        "SELECT request_date, component, tokens ",
+        "FROM daily ",
+        "LATERAL VIEW STACK( ",
+        "    4, ",
+        "    'Cache read (0.1x)', cache_read, ",
+        "    'Rolling write (1.25x)', write_5m, ",
+        "    'Static write (2x)', write_1h, ",
+        "    'Uncached (1.0x)', uncached ",
+        ") AS component, tokens ",
+        "ORDER BY request_date, component"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_cache_billed_trend",
+      "displayName": "Billed vs Uncached Equivalent",
+      "queryLines": [
+        "WITH llm AS ( ",
+        "    SELECT ",
+        "        trace_id, ",
+        "        request_time, ",
+        "        execution_duration_ms, ",
+        "        COALESCE(trace_metadata:['mlflow.trace.user']::string, trace_metadata:['mlflow.user']::string) AS raw_user, ",
+        "        CAST(span.attributes:['mlflow.spanOutputs']:model AS STRING) AS model, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:prompt_tokens AS BIGINT), 0) AS prompt_tokens, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:completion_tokens AS BIGINT), 0) AS output_tokens, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_read_input_tokens AS BIGINT), CAST(span.attributes:['mlflow.chat.tokenUsage']:cache_read_input_tokens AS BIGINT), 0) AS cache_read, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_creation_input_tokens AS BIGINT), CAST(span.attributes:['mlflow.chat.tokenUsage']:cache_creation_input_tokens AS BIGINT), 0) AS cache_write, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_creation:ephemeral_1h_input_tokens AS BIGINT), 0) AS write_1h ",
+        "    FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "    LATERAL VIEW EXPLODE(spans) AS span ",
+        "    WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "      AND span.attributes:['mlflow.chat.tokenUsage'] IS NOT NULL ",
+        "), ",
+        "priced AS ( ",
+        "    SELECT *, ",
+        "        GREATEST(cache_write - write_1h, 0) AS write_5m, ",
+        "        GREATEST(prompt_tokens - cache_read - cache_write, 0) AS uncached ",
+        "    FROM llm ",
+        "), ",
+        "billed AS ( ",
+        "    SELECT *, ",
+        "        0.1 * cache_read + 1.25 * write_5m + 2.0 * write_1h + uncached AS billed_units ",
+        "    FROM priced ",
+        "), ",
+        "date_spine AS ( ",
+        "    SELECT EXPLODE(SEQUENCE(CAST(:time_range.min AS DATE), CAST(:time_range.max AS DATE), INTERVAL 1 DAY)) AS request_date ",
+        "), ",
+        "daily AS ( ",
+        "    SELECT DATE_TRUNC('DAY', request_time) AS request_date, ",
+        "        ROUND(SUM(billed_units)) AS billed_units, ",
+        "        SUM(prompt_tokens) AS uncached_equivalent ",
+        "    FROM billed ",
+        "    GROUP BY 1 ",
+        ") ",
+        "SELECT d.request_date, ",
+        "    COALESCE(t.billed_units, 0) AS billed_units, ",
+        "    COALESCE(t.uncached_equivalent, 0) AS uncached_equivalent ",
+        "FROM date_spine d LEFT JOIN daily t ON d.request_date = t.request_date ",
+        "ORDER BY d.request_date"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_cache_by_model",
+      "displayName": "Token Economics by Model",
+      "queryLines": [
+        "WITH llm AS ( ",
+        "    SELECT ",
+        "        trace_id, ",
+        "        request_time, ",
+        "        execution_duration_ms, ",
+        "        COALESCE(trace_metadata:['mlflow.trace.user']::string, trace_metadata:['mlflow.user']::string) AS raw_user, ",
+        "        CAST(span.attributes:['mlflow.spanOutputs']:model AS STRING) AS model, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:prompt_tokens AS BIGINT), 0) AS prompt_tokens, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:completion_tokens AS BIGINT), 0) AS output_tokens, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_read_input_tokens AS BIGINT), CAST(span.attributes:['mlflow.chat.tokenUsage']:cache_read_input_tokens AS BIGINT), 0) AS cache_read, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_creation_input_tokens AS BIGINT), CAST(span.attributes:['mlflow.chat.tokenUsage']:cache_creation_input_tokens AS BIGINT), 0) AS cache_write, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_creation:ephemeral_1h_input_tokens AS BIGINT), 0) AS write_1h ",
+        "    FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "    LATERAL VIEW EXPLODE(spans) AS span ",
+        "    WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "      AND span.attributes:['mlflow.chat.tokenUsage'] IS NOT NULL ",
+        "), ",
+        "priced AS ( ",
+        "    SELECT *, ",
+        "        GREATEST(cache_write - write_1h, 0) AS write_5m, ",
+        "        GREATEST(prompt_tokens - cache_read - cache_write, 0) AS uncached ",
+        "    FROM llm ",
+        "), ",
+        "billed AS ( ",
+        "    SELECT *, ",
+        "        0.1 * cache_read + 1.25 * write_5m + 2.0 * write_1h + uncached AS billed_units ",
+        "    FROM priced ",
+        ") ",
+        "SELECT ",
+        "    COALESCE(model, 'unknown') AS model, ",
+        "    COUNT(*) AS llm_calls, ",
+        "    SUM(prompt_tokens) AS input_tokens, ",
+        "    ROUND(100.0 * SUM(cache_read) / NULLIF(SUM(prompt_tokens), 0), 1) AS cache_read_pct, ",
+        "    ROUND(SUM(billed_units)) AS billed_units ",
+        "FROM billed ",
+        "GROUP BY 1 ",
+        "ORDER BY input_tokens DESC"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_expensive_requests",
+      "displayName": "Most Expensive Requests",
+      "queryLines": [
+        "WITH llm AS ( ",
+        "    SELECT ",
+        "        trace_id, ",
+        "        request_time, ",
+        "        execution_duration_ms, ",
+        "        COALESCE(trace_metadata:['mlflow.trace.user']::string, trace_metadata:['mlflow.user']::string) AS raw_user, ",
+        "        CAST(span.attributes:['mlflow.spanOutputs']:model AS STRING) AS model, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:prompt_tokens AS BIGINT), 0) AS prompt_tokens, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:completion_tokens AS BIGINT), 0) AS output_tokens, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_read_input_tokens AS BIGINT), CAST(span.attributes:['mlflow.chat.tokenUsage']:cache_read_input_tokens AS BIGINT), 0) AS cache_read, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_creation_input_tokens AS BIGINT), CAST(span.attributes:['mlflow.chat.tokenUsage']:cache_creation_input_tokens AS BIGINT), 0) AS cache_write, ",
+        "        COALESCE(CAST(span.attributes:['mlflow.spanOutputs']:usage:cache_creation:ephemeral_1h_input_tokens AS BIGINT), 0) AS write_1h ",
+        "    FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "    LATERAL VIEW EXPLODE(spans) AS span ",
+        "    WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "      AND span.attributes:['mlflow.chat.tokenUsage'] IS NOT NULL ",
+        "), ",
+        "priced AS ( ",
+        "    SELECT *, ",
+        "        GREATEST(cache_write - write_1h, 0) AS write_5m, ",
+        "        GREATEST(prompt_tokens - cache_read - cache_write, 0) AS uncached ",
+        "    FROM llm ",
+        "), ",
+        "billed AS ( ",
+        "    SELECT *, ",
+        "        0.1 * cache_read + 1.25 * write_5m + 2.0 * write_1h + uncached AS billed_units ",
+        "    FROM priced ",
+        ") ",
+        "SELECT ",
+        "    MIN(request_time) AS request_time, ",
+        "    CONCAT('user-', LEFT(SHA2(COALESCE(MAX(raw_user), 'unknown'), 256), 8)) AS user_id, ",
+        "    COUNT(*) AS llm_calls, ",
+        "    SUM(prompt_tokens) AS input_tokens, ",
+        "    SUM(cache_read) AS cache_read, ",
+        "    SUM(write_5m) AS write_5m, ",
+        "    SUM(write_1h) AS write_1h, ",
+        "    SUM(uncached) AS uncached, ",
+        "    ROUND(SUM(billed_units)) AS billed_units, ",
+        "    ROUND(100.0 * (1 - SUM(billed_units) / NULLIF(SUM(prompt_tokens), 0)), 1) AS savings_pct, ",
+        "    SUM(output_tokens) AS output_tokens, ",
+        "    trace_id ",
+        "FROM billed ",
+        "GROUP BY trace_id ",
+        "ORDER BY input_tokens DESC ",
+        "LIMIT 100"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    },
+    {
+      "name": "ds_tool_result_weight",
+      "displayName": "Tool Result Weight",
+      "queryLines": [
+        "WITH tool_spans AS ( ",
+        "    SELECT ",
+        "        COALESCE( ",
+        "            GET_JSON_OBJECT(CAST(span.attributes:['mlflow.spanInputs'] AS STRING), '$.tool_name'), ",
+        "            span.name ",
+        "        ) AS raw_tool_name, ",
+        "        LENGTH(CAST(span.attributes:['mlflow.spanOutputs'] AS STRING)) AS result_chars ",
+        "    FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_unified ",
+        "    LATERAL VIEW EXPLODE(spans) AS span ",
+        "    WHERE (DATE(request_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL) ",
+        "      AND CAST(span.attributes:['mlflow.spanType'] AS STRING) = 'TOOL' ",
+        ") ",
+        "SELECT ",
+        "    REPLACE(raw_tool_name, '__', '.') AS tool_name, ",
+        "    COUNT(*) AS call_count, ",
+        "    ROUND(AVG(result_chars)) AS avg_chars, ",
+        "    MAX(result_chars) AS max_chars, ",
+        "    ROUND(SUM(result_chars) / 4.0) AS est_total_tokens ",
+        "FROM tool_spans ",
+        "WHERE raw_tool_name IS NOT NULL ",
+        "GROUP BY 1 ",
+        "ORDER BY est_total_tokens DESC"
+      ],
+      "parameters": [{ "displayName": "Time Range", "keyword": "time_range", "dataType": "DATE", "complexType": "RANGE", "defaultSelection": { "range": { "dataType": "DATE", "min": {"value": "now-30d/d"}, "max": {"value": "now/d"} } } }]
+    }
+  ],
+  "pages": [
+    {
+      "name": "global_filters",
+      "displayName": "Global Filters",
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
+      "layout": [
+        {
+          "widget": {
+            "name": "w_time_range_filter",
+            "queries": [
+              { "name": "param_ds_request_volume_time_range", "query": { "datasetName": "ds_request_volume", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_latency_time_range", "query": { "datasetName": "ds_latency", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_error_rate_time_range", "query": { "datasetName": "ds_error_rate", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_tool_calls_time_range", "query": { "datasetName": "ds_tool_calls", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_quality_scores_time_range", "query": { "datasetName": "ds_quality_scores", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_human_feedback_time_range", "query": { "datasetName": "ds_human_feedback", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_cost_time_range", "query": { "datasetName": "ds_cost", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_daily_users_time_range", "query": { "datasetName": "ds_daily_users", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_kpi_users_time_range", "query": { "datasetName": "ds_kpi_users", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_kpi_avg_requests_per_user_time_range", "query": { "datasetName": "ds_kpi_avg_requests_per_user", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_kpi_tokens_time_range", "query": { "datasetName": "ds_kpi_tokens", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_token_trend_time_range", "query": { "datasetName": "ds_token_trend", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_kpi_requests_time_range", "query": { "datasetName": "ds_kpi_requests", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_kpi_latency_time_range", "query": { "datasetName": "ds_kpi_latency", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_kpi_errors_time_range", "query": { "datasetName": "ds_kpi_errors", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_sessions_time_range", "query": { "datasetName": "ds_sessions", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_top_users_time_range", "query": { "datasetName": "ds_top_users", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_prompt_versions_time_range", "query": { "datasetName": "ds_prompt_versions", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_model_usage_time_range", "query": { "datasetName": "ds_model_usage", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_feedback_categories_time_range", "query": { "datasetName": "ds_feedback_categories", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_feedback_comments_time_range", "query": { "datasetName": "ds_feedback_comments", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_cache_kpis_time_range", "query": { "datasetName": "ds_cache_kpis", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_cache_composition_time_range", "query": { "datasetName": "ds_cache_composition", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_cache_billed_trend_time_range", "query": { "datasetName": "ds_cache_billed_trend", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_cache_by_model_time_range", "query": { "datasetName": "ds_cache_by_model", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_expensive_requests_time_range", "query": { "datasetName": "ds_expensive_requests", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } },
+              { "name": "param_ds_tool_result_weight_time_range", "query": { "datasetName": "ds_tool_result_weight", "parameters": [{ "name": "time_range", "keyword": "time_range" }], "disaggregated": false } }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  { "parameterName": "time_range", "queryName": "param_ds_request_volume_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_latency_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_error_rate_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_tool_calls_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_quality_scores_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_human_feedback_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_cost_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_daily_users_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_kpi_users_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_kpi_avg_requests_per_user_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_kpi_tokens_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_token_trend_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_kpi_requests_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_kpi_latency_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_kpi_errors_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_sessions_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_top_users_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_prompt_versions_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_model_usage_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_feedback_categories_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_feedback_comments_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_cache_kpis_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_cache_composition_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_cache_billed_trend_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_cache_by_model_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_expensive_requests_time_range" },
+                  { "parameterName": "time_range", "queryName": "param_ds_tool_result_weight_time_range" }
+                ]
+              },
+              "selection": {
+                "defaultSelection": {
+                  "range": {
+                    "dataType": "DATE",
+                    "min": { "value": "now-30d/d" },
+                    "max": { "value": "now/d" }
+                  }
+                }
+              },
+              "frame": { "showTitle": true, "title": "Time Window" }
+            }
+          },
+          "position": { "x": 0, "y": 0, "width": 1, "height": 2 }
+        }
+      ]
+    },
+    {
+      "name": "agent_operations",
+      "displayName": "Agent Operations",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layout": [
+        {
+          "widget": {
+            "name": "w_title",
+            "multilineTextboxSpec": {
+              "lines": ["# Agent Operations Dashboard"]
+            }
+          },
+          "position": { "x": 0, "y": 0, "width": 6, "height": 1 }
+        },
+        {
+          "widget": {
+            "name": "w_subtitle",
+            "multilineTextboxSpec": {
+              "lines": ["Operational overview -- request volume, latency, errors, tool usage, quality, and cost."]
+            }
+          },
+          "position": { "x": 0, "y": 1, "width": 6, "height": 1 }
+        },
+        {
+          "widget": {
+            "name": "w_kpi_tokens",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpi_tokens",
+                  "fields": [
+                    { "name": "total_tokens", "expression": "`total_tokens`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "total_tokens", "displayName": "Total Tokens" }
+              },
+              "frame": { "showTitle": true, "title": "Total Tokens" }
+            }
+          },
+          "position": { "x": 0, "y": 2, "width": 2, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "w_kpi_users",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpi_users",
+                  "fields": [
+                    { "name": "unique_users", "expression": "`unique_users`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "unique_users", "displayName": "Unique Users" }
+              },
+              "frame": { "showTitle": true, "title": "Unique Users" }
+            }
+          },
+          "position": { "x": 2, "y": 2, "width": 2, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "w_kpi_requests",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpi_requests",
+                  "fields": [
+                    { "name": "total_requests", "expression": "`total_requests`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "total_requests", "displayName": "Total Requests" }
+              },
+              "frame": { "showTitle": true, "title": "Total Requests" }
+            }
+          },
+          "position": { "x": 4, "y": 2, "width": 2, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "w_kpi_avg_requests_per_user",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpi_avg_requests_per_user",
+                  "fields": [
+                    { "name": "avg_requests_per_user", "expression": "`avg_requests_per_user`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "avg_requests_per_user", "displayName": "Avg Req / User" }
+              },
+              "frame": { "showTitle": true, "title": "Avg Requests/User" }
+            }
+          },
+          "position": { "x": 0, "y": 5, "width": 2, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "w_kpi_latency",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpi_latency",
+                  "fields": [
+                    { "name": "avg_latency_ms", "expression": "`avg_latency_ms`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "avg_latency_ms", "displayName": "Avg Latency (ms)" }
+              },
+              "frame": { "showTitle": true, "title": "Avg Latency (ms)" }
+            }
+          },
+          "position": { "x": 2, "y": 5, "width": 2, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "w_kpi_errors",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpi_errors",
+                  "fields": [
+                    { "name": "error_rate_pct", "expression": "`error_rate_pct`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "error_rate_pct", "displayName": "Error Rate %" }
+              },
+              "frame": { "showTitle": true, "title": "Error Rate %" }
+            }
+          },
+          "position": { "x": 4, "y": 5, "width": 2, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "w_trends_header",
+            "multilineTextboxSpec": {
+              "lines": ["## Trends"]
+            }
+          },
+          "position": { "x": 0, "y": 8, "width": 6, "height": 1 }
+        },
+        {
+          "widget": {
+            "name": "w_token_trend_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_token_trend",
+                  "fields": [
+                    { "name": "request_date", "expression": "`request_date`" },
+                    { "name": "input_tokens", "expression": "`input_tokens`" },
+                    { "name": "output_tokens", "expression": "`output_tokens`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": { "fieldName": "request_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": {
+                  "scale": { "type": "quantitative" },
+                  "fields": [
+                    { "fieldName": "input_tokens", "displayName": "Input Tokens" },
+                    { "fieldName": "output_tokens", "displayName": "Output Tokens" }
+                  ]
+                }
+              },
+              "frame": { "showTitle": true, "title": "Daily Token Usage (Input / Output)" }
+            }
+          },
+          "position": { "x": 0, "y": 9, "width": 3, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_request_volume_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_request_volume",
+                  "fields": [
+                    { "name": "request_date", "expression": "`request_date`" },
+                    { "name": "request_count", "expression": "`request_count`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": { "fieldName": "request_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": { "fieldName": "request_count", "scale": { "type": "quantitative" }, "displayName": "Requests" }
+              },
+              "frame": { "showTitle": true, "title": "Daily Request Volume" }
+            }
+          },
+          "position": { "x": 3, "y": 9, "width": 3, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_latency_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_latency",
+                  "fields": [
+                    { "name": "request_date", "expression": "`request_date`" },
+                    { "name": "latency_p50_s", "expression": "`latency_p50_s`" },
+                    { "name": "latency_p95_s", "expression": "`latency_p95_s`" },
+                    { "name": "latency_p99_s", "expression": "`latency_p99_s`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": { "fieldName": "request_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": {
+                  "scale": { "type": "quantitative" },
+                  "fields": [
+                    { "fieldName": "latency_p50_s", "displayName": "p50" },
+                    { "fieldName": "latency_p95_s", "displayName": "p95" },
+                    { "fieldName": "latency_p99_s", "displayName": "p99" }
+                  ]
+                }
+              },
+              "frame": { "showTitle": true, "title": "Latency Percentiles (seconds)" }
+            }
+          },
+          "position": { "x": 0, "y": 14, "width": 3, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_daily_users_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_daily_users",
+                  "fields": [
+                    { "name": "request_date", "expression": "`request_date`" },
+                    { "name": "unique_users", "expression": "`unique_users`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": { "fieldName": "request_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": { "fieldName": "unique_users", "scale": { "type": "quantitative" }, "displayName": "Unique Users" }
+              },
+              "frame": { "showTitle": true, "title": "Daily Unique Users" }
+            }
+          },
+          "position": { "x": 3, "y": 14, "width": 3, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_tools_header",
+            "multilineTextboxSpec": {
+              "lines": ["## Tool Usage & Quality"]
+            }
+          },
+          "position": { "x": 0, "y": 19, "width": 6, "height": 1 }
+        },
+        {
+          "widget": {
+            "name": "w_tool_calls_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_tool_calls",
+                  "fields": [
+                    { "name": "request_date", "expression": "`request_date`" },
+                    { "name": "tool_name", "expression": "`tool_name`" },
+                    { "name": "call_count", "expression": "`call_count`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": { "fieldName": "request_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": { "fieldName": "call_count", "scale": { "type": "quantitative" }, "displayName": "Calls" },
+                "color": { "fieldName": "tool_name", "scale": { "type": "categorical" }, "displayName": "Tool" }
+              },
+              "frame": { "showTitle": true, "title": "Daily Tool Calls by Tool" }
+            }
+          },
+          "position": { "x": 0, "y": 20, "width": 3, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_quality_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_quality_scores",
+                  "fields": [
+                    { "name": "score_date", "expression": "`score_date`" },
+                    { "name": "scorer", "expression": "`scorer`" },
+                    { "name": "avg_score", "expression": "`avg_score`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": { "fieldName": "score_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": { "fieldName": "avg_score", "scale": { "type": "quantitative" }, "displayName": "Avg Score" },
+                "color": { "fieldName": "scorer", "scale": { "type": "categorical" }, "displayName": "Scorer" }
+              },
+              "frame": { "showTitle": true, "title": "Quality Scores by Scorer" }
+            }
+          },
+          "position": { "x": 3, "y": 20, "width": 3, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_human_feedback_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_human_feedback",
+                  "fields": [
+                    { "name": "sentiment", "expression": "`sentiment`" },
+                    { "name": "feedback_date", "expression": "`feedback_date`" },
+                    { "name": "feedback_count", "expression": "`feedback_count`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "mark": { "layout": "group" },
+              "encodings": {
+                "x": { "fieldName": "feedback_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": { "fieldName": "feedback_count", "scale": { "type": "quantitative" }, "displayName": "Count" },
+                "color": { "fieldName": "sentiment", "scale": { "type": "categorical", "mappings": [{"value": "Positive", "color": {"themeColorType": "visualizationColors", "position": 3}}, {"value": "Negative", "color": {"themeColorType": "visualizationColors", "position": 4}}] }, "displayName": "Sentiment" }
+              },
+              "frame": { "showTitle": true, "title": "Human Feedback (Thumbs Up / Down)" }
+            }
+          },
+          "position": { "x": 0, "y": 25, "width": 3, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_feedback_categories_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_feedback_categories",
+                  "fields": [
+                    { "name": "category", "expression": "`category`" },
+                    { "name": "count", "expression": "`count`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": { "fieldName": "count", "scale": { "type": "quantitative" }, "displayName": "Count" },
+                "y": { "fieldName": "category", "scale": { "type": "categorical" }, "displayName": "Category" }
+              },
+              "frame": { "showTitle": true, "title": "Feedback Categories" }
+            }
+          },
+          "position": { "x": 3, "y": 25, "width": 3, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_feedback_comments_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_feedback_comments",
+                  "fields": [
+                    { "name": "submitted_at", "expression": "`submitted_at`" },
+                    { "name": "user_hash", "expression": "`user_hash`" },
+                    { "name": "comment", "expression": "`comment`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  { "fieldName": "submitted_at", "displayName": "Submitted", "type": "datetime" },
+                  { "fieldName": "user_hash", "displayName": "User", "type": "string" },
+                  { "fieldName": "comment", "displayName": "Comment", "type": "string" }
+                ]
+              },
+              "frame": { "showTitle": true, "title": "Recent Feedback Comments" }
+            }
+          },
+          "position": { "x": 0, "y": 30, "width": 6, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_cost_header",
+            "multilineTextboxSpec": {
+              "lines": ["## Cost Attribution"]
+            }
+          },
+          "position": { "x": 0, "y": 35, "width": 6, "height": 1 }
+        },
+        {
+          "widget": {
+            "name": "w_cost_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_cost",
+                  "fields": [
+                    { "name": "usage_date", "expression": "`usage_date`" },
+                    { "name": "resource_type", "expression": "`resource_type`" },
+                    { "name": "total_dbu", "expression": "`total_dbu`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": { "fieldName": "usage_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": { "fieldName": "total_dbu", "scale": { "type": "quantitative" }, "displayName": "DBU" },
+                "color": { "fieldName": "resource_type", "scale": { "type": "categorical" }, "displayName": "Resource" }
+              },
+              "frame": { "showTitle": true, "title": "Daily DBU Cost by Resource" }
+            }
+          },
+          "position": { "x": 0, "y": 36, "width": 6, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_users_sessions_header",
+            "multilineTextboxSpec": {
+              "lines": ["## Users & Sessions"]
+            }
+          },
+          "position": { "x": 0, "y": 41, "width": 6, "height": 1 }
+        },
+        {
+          "widget": {
+            "name": "w_top_users_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_top_users",
+                  "fields": [
+                    { "name": "user_id", "expression": "`user_id`" },
+                    { "name": "request_count", "expression": "`request_count`" },
+                    { "name": "avg_latency_ms", "expression": "`avg_latency_ms`" },
+                    { "name": "total_tokens", "expression": "`total_tokens`" },
+                    { "name": "last_active", "expression": "`last_active`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  { "fieldName": "user_id", "displayName": "User", "type": "string" },
+                  { "fieldName": "request_count", "displayName": "Requests", "type": "number" },
+                  { "fieldName": "avg_latency_ms", "displayName": "Avg Latency (ms)", "type": "number" },
+                  { "fieldName": "total_tokens", "displayName": "Total Tokens", "type": "number" },
+                  { "fieldName": "last_active", "displayName": "Last Active", "type": "datetime" }
+                ]
+              },
+              "frame": { "showTitle": true, "title": "Top Users" }
+            }
+          },
+          "position": { "x": 0, "y": 42, "width": 6, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_sessions_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_sessions",
+                  "fields": [
+                    { "name": "request_date", "expression": "`request_date`" },
+                    { "name": "unique_sessions", "expression": "`unique_sessions`" },
+                    { "name": "avg_traces_per_session", "expression": "`avg_traces_per_session`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": { "fieldName": "request_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": {
+                  "scale": { "type": "quantitative" },
+                  "fields": [
+                    { "fieldName": "unique_sessions", "displayName": "Sessions" },
+                    { "fieldName": "avg_traces_per_session", "displayName": "Avg Requests/Session" }
+                  ]
+                }
+              },
+              "frame": { "showTitle": true, "title": "Daily Sessions & Engagement" }
+            }
+          },
+          "position": { "x": 0, "y": 47, "width": 6, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_versions_header",
+            "multilineTextboxSpec": {
+              "lines": ["## Prompt & Model Versions"]
+            }
+          },
+          "position": { "x": 0, "y": 52, "width": 6, "height": 1 }
+        },
+        {
+          "widget": {
+            "name": "w_prompt_versions_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_prompt_versions",
+                  "fields": [
+                    { "name": "request_date", "expression": "`request_date`" },
+                    { "name": "prompt_version", "expression": "`prompt_version`" },
+                    { "name": "trace_count", "expression": "`trace_count`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": { "fieldName": "request_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": { "fieldName": "trace_count", "scale": { "type": "quantitative" }, "displayName": "Traces" },
+                "color": { "fieldName": "prompt_version", "scale": { "type": "categorical" }, "displayName": "Prompt Version" }
+              },
+              "frame": { "showTitle": true, "title": "Traces by Prompt Version" }
+            }
+          },
+          "position": { "x": 0, "y": 53, "width": 3, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "w_model_usage_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_model_usage",
+                  "fields": [
+                    { "name": "request_date", "expression": "`request_date`" },
+                    { "name": "model_id", "expression": "`model_id`" },
+                    { "name": "trace_count", "expression": "`trace_count`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": { "fieldName": "request_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": { "fieldName": "trace_count", "scale": { "type": "quantitative" }, "displayName": "Traces" },
+                "color": { "fieldName": "model_id", "scale": { "type": "categorical" }, "displayName": "Model Version" }
+              },
+              "frame": { "showTitle": true, "title": "Traces by Model Version" }
+            }
+          },
+          "position": { "x": 3, "y": 53, "width": 3, "height": 5 }
+        }
+      ]
+    },
+    {
+      "name": "token_economics",
+      "displayName": "Token & Cache Economics",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layout": [
+        {
+          "widget": {
+            "name": "w_token_title",
+            "multilineTextboxSpec": {
+              "lines": ["# Token & Cache Economics"]
+            }
+          },
+          "position": { "x": 0, "y": 0, "width": 6, "height": 1 }
+        },
+        {
+          "widget": {
+            "name": "w_token_glossary",
+            "multilineTextboxSpec": {
+              "lines": [
+                "**Modelled cost, not billed cost.** MLflow reports input tokens as the uncached-equivalent total, so its token counters look the same whether or not prompt caching worked.\n",
+                "Billed units apply the published multipliers: cache read 0.1x, rolling (5m) write 1.25x, static (1h) write 2x, uncached 1.0x. Output tokens are never discountable. The DBU panel is the real-money cross-check.\n",
+                "_Prefix rebuilds per 100 requests_ is a health signal: a static write should happen about once per hour per replica. If it tracks request count, the cached prefix has stopped being byte-stable.\n"
+              ]
+            }
+          },
+          "position": { "x": 0, "y": 1, "width": 6, "height": 2 }
+        },
+        {
+          "widget": {
+            "name": "w_token_kpi_input",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_cache_kpis",
+                  "fields": [
+                    { "name": "input_tokens", "expression": "`input_tokens`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "input_tokens", "displayName": "Input Tokens (uncached-equiv)" }
+              },
+              "frame": { "showTitle": true, "title": "Input Tokens (uncached-equiv)" }
+            }
+          },
+          "position": { "x": 0, "y": 3, "width": 2, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "w_token_kpi_cache_read",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_cache_kpis",
+                  "fields": [
+                    { "name": "cache_read_pct", "expression": "`cache_read_pct`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "cache_read_pct", "displayName": "Cache Read %" }
+              },
+              "frame": { "showTitle": true, "title": "Cache Read %" }
+            }
+          },
+          "position": { "x": 2, "y": 3, "width": 2, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "w_token_kpi_savings",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_cache_kpis",
+                  "fields": [
+                    { "name": "savings_pct", "expression": "`savings_pct`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "savings_pct", "displayName": "Modelled Savings %" }
+              },
+              "frame": { "showTitle": true, "title": "Modelled Savings %" }
+            }
+          },
+          "position": { "x": 4, "y": 3, "width": 2, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "w_token_kpi_multiplier",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_cache_kpis",
+                  "fields": [
+                    { "name": "effective_multiplier", "expression": "`effective_multiplier`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "effective_multiplier", "displayName": "Effective Multiplier" }
+              },
+              "frame": { "showTitle": true, "title": "Effective Multiplier" }
+            }
+          },
+          "position": { "x": 0, "y": 6, "width": 2, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "w_token_kpi_output",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_cache_kpis",
+                  "fields": [
+                    { "name": "output_tokens", "expression": "`output_tokens`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "output_tokens", "displayName": "Output Tokens" }
+              },
+              "frame": { "showTitle": true, "title": "Output Tokens" }
+            }
+          },
+          "position": { "x": 2, "y": 6, "width": 2, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "w_token_kpi_prefix_rebuilds",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_cache_kpis",
+                  "fields": [
+                    { "name": "prefix_rebuilds_per_100", "expression": "`prefix_rebuilds_per_100`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "prefix_rebuilds_per_100", "displayName": "Prefix Rebuilds / 100 Req" }
+              },
+              "frame": { "showTitle": true, "title": "Prefix Rebuilds / 100 Req" }
+            }
+          },
+          "position": { "x": 4, "y": 6, "width": 2, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "w_token_composition_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_cache_composition",
+                  "fields": [
+                    { "name": "request_date", "expression": "`request_date`" },
+                    { "name": "component", "expression": "`component`" },
+                    { "name": "tokens", "expression": "`tokens`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": { "fieldName": "request_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": { "fieldName": "tokens", "scale": { "type": "quantitative" }, "displayName": "Input Tokens" },
+                "color": { "fieldName": "component", "scale": { "type": "categorical" }, "displayName": "Priced as" }
+              },
+              "frame": { "showTitle": true, "title": "Daily Input Tokens by How They Were Priced" }
+            }
+          },
+          "position": { "x": 0, "y": 9, "width": 4, "height": 6 }
+        },
+        {
+          "widget": {
+            "name": "w_token_dbu_counter",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_cost",
+                  "fields": [
+                    { "name": "sum(total_dbu)", "expression": "SUM(`total_dbu`)" }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": { "fieldName": "sum(total_dbu)", "displayName": "Billed DBU" }
+              },
+              "frame": { "showTitle": true, "title": "Billed DBU (actual)" }
+            }
+          },
+          "position": { "x": 4, "y": 9, "width": 2, "height": 6 }
+        },
+        {
+          "widget": {
+            "name": "w_token_billed_trend_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_cache_billed_trend",
+                  "fields": [
+                    { "name": "request_date", "expression": "`request_date`" },
+                    { "name": "billed_units", "expression": "`billed_units`" },
+                    { "name": "uncached_equivalent", "expression": "`uncached_equivalent`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": { "fieldName": "request_date", "scale": { "type": "temporal" }, "displayName": "Date" },
+                "y": {
+                  "scale": { "type": "quantitative" },
+                  "fields": [
+                    { "fieldName": "billed_units", "displayName": "Modelled Billed Units" },
+                    { "fieldName": "uncached_equivalent", "displayName": "Uncached Equivalent" }
+                  ]
+                }
+              },
+              "frame": { "showTitle": true, "title": "What Caching Saves (gap between the lines)" }
+            }
+          },
+          "position": { "x": 0, "y": 15, "width": 3, "height": 6 }
+        },
+        {
+          "widget": {
+            "name": "w_token_by_model_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_cache_by_model",
+                  "fields": [
+                    { "name": "model", "expression": "`model`" },
+                    { "name": "input_tokens", "expression": "`input_tokens`" },
+                    { "name": "billed_units", "expression": "`billed_units`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "mark": { "layout": "group" },
+              "encodings": {
+                "x": { "fieldName": "model", "scale": { "type": "categorical" }, "displayName": "Model" },
+                "y": {
+                  "scale": { "type": "quantitative" },
+                  "fields": [
+                    { "fieldName": "input_tokens", "displayName": "Uncached Equivalent" },
+                    { "fieldName": "billed_units", "displayName": "Modelled Billed Units" }
+                  ]
+                }
+              },
+              "frame": { "showTitle": true, "title": "Input Tokens vs Billed Units by Model" }
+            }
+          },
+          "position": { "x": 3, "y": 15, "width": 3, "height": 6 }
+        },
+        {
+          "widget": {
+            "name": "w_token_expensive_requests_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_expensive_requests",
+                  "fields": [
+                    { "name": "request_time", "expression": "`request_time`" },
+                    { "name": "user_id", "expression": "`user_id`" },
+                    { "name": "llm_calls", "expression": "`llm_calls`" },
+                    { "name": "input_tokens", "expression": "`input_tokens`" },
+                    { "name": "cache_read", "expression": "`cache_read`" },
+                    { "name": "write_5m", "expression": "`write_5m`" },
+                    { "name": "write_1h", "expression": "`write_1h`" },
+                    { "name": "uncached", "expression": "`uncached`" },
+                    { "name": "billed_units", "expression": "`billed_units`" },
+                    { "name": "savings_pct", "expression": "`savings_pct`" },
+                    { "name": "output_tokens", "expression": "`output_tokens`" },
+                    { "name": "trace_id", "expression": "`trace_id`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  { "fieldName": "request_time", "displayName": "Time", "type": "datetime" },
+                  { "fieldName": "user_id", "displayName": "User", "type": "string" },
+                  { "fieldName": "llm_calls", "displayName": "LLM Calls", "type": "number" },
+                  { "fieldName": "input_tokens", "displayName": "Input (uncached-equiv)", "type": "number" },
+                  { "fieldName": "cache_read", "displayName": "Cache Read", "type": "number" },
+                  { "fieldName": "write_5m", "displayName": "Rolling Write", "type": "number" },
+                  { "fieldName": "write_1h", "displayName": "Static Write", "type": "number" },
+                  { "fieldName": "uncached", "displayName": "Uncached", "type": "number" },
+                  { "fieldName": "billed_units", "displayName": "Billed Units", "type": "number" },
+                  { "fieldName": "savings_pct", "displayName": "Savings %", "type": "number" },
+                  { "fieldName": "output_tokens", "displayName": "Output", "type": "number" },
+                  { "fieldName": "trace_id", "displayName": "Trace", "type": "string" }
+                ]
+              },
+              "frame": { "showTitle": true, "title": "Most Expensive Requests" }
+            }
+          },
+          "position": { "x": 0, "y": 21, "width": 6, "height": 8 }
+        },
+        {
+          "widget": {
+            "name": "w_token_tool_weight_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_tool_result_weight",
+                  "fields": [
+                    { "name": "tool_name", "expression": "`tool_name`" },
+                    { "name": "call_count", "expression": "`call_count`" },
+                    { "name": "avg_chars", "expression": "`avg_chars`" },
+                    { "name": "max_chars", "expression": "`max_chars`" },
+                    { "name": "est_total_tokens", "expression": "`est_total_tokens`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  { "fieldName": "tool_name", "displayName": "Tool", "type": "string" },
+                  { "fieldName": "call_count", "displayName": "Calls", "type": "number" },
+                  { "fieldName": "avg_chars", "displayName": "Avg Result Chars", "type": "number" },
+                  { "fieldName": "max_chars", "displayName": "Largest Result Chars", "type": "number" },
+                  { "fieldName": "est_total_tokens", "displayName": "Est. Tokens Introduced", "type": "number" }
+                ]
+              },
+              "frame": { "showTitle": true, "title": "Tool Results by Weight (est. 4 chars/token)" }
+            }
+          },
+          "position": { "x": 0, "y": 29, "width": 6, "height": 7 }
+        }
+      ]
+    }
+  ]
+}

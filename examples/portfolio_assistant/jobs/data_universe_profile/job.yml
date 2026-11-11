@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=../../../../.agent-foundry/schemas/job_config.schema.json
+
+# Profiles the curated views and rebuilds the two small tables that
+# get_data_landscape() / get_table_metadata() read. Doing the scanning
+# here, on a schedule, is what lets those functions be trivial SELECTs --
+# tier 1 is read on the request path, so it cannot afford to count rows.
+
+name: "${var.target_name}-${var.app_name}-data-universe-profile"
+description: "Profile curated views and rebuild the data-universe landscape tables"
+
+tasks:
+  - task_key: profile_views
+    notebook_task:
+      notebook_path: ./notebooks/refresh_data_universe.py
+      base_parameters:
+        catalog: "${var.catalog}"
+        views_schema: "${var.schema_prefix}_views"
+        agent_schema: "${var.schema_prefix}_agent"
+    timeout_seconds: 1800
+    max_retries: 1
+
+# A daily cron keeps the example followable. In production, triggering on
+# updates to the upstream tables is the better pattern -- the landscape
+# then tracks the data rather than the clock:
+#
+#   trigger:
+#     table_update:
+#       table_names: ["${var.catalog}.<schema>.<freshness_table>"]
+#       condition: ANY_UPDATED
+#       min_time_between_triggers_seconds: 300
+#
+# Each run that changes the rendered block costs one prompt-cache write,
+# so there is no reason to refresh more often than the data changes.
+schedule:
+  quartz_cron_expression: "0 0 6 * * ?"
+  timezone_id: UTC
+  pause_status: UNPAUSED
+
+tags:
+  workload: data-universe-profile

@@ -1,0 +1,10 @@
+type: managed_sql
+description: >
+  Read-only SQL against this app's dedicated SQL warehouse.
+
+tools:
+  allow:
+    - execute_sql_read_only
+    - poll_sql_result
+  default_meta:
+    warehouse_id: "${var.warehouse_id}"

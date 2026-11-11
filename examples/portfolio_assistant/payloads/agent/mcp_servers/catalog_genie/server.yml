@@ -1,0 +1,38 @@
+# MCP Server: catalog_genie (managed_genie)
+# ==========================================
+# Wraps the info_schema Genie space (deployed by the genie/info_schema/
+# brick) behind a Databricks Managed Genie MCP server.  Replaces the
+# legacy `type: genie` direct-SDK skill tools.
+#
+# URL pattern: {host}/api/2.0/mcp/genie/{space_id}
+# space_id resolves at deploy time from the genie brick's _state file
+# (published as ${var.genie_space_id__info_schema}).
+
+type: managed_genie
+description: >
+  Natural-language SQL over Unity Catalog metadata via Genie.
+  Use for table counts, column details, schema summaries, and data
+  type distributions backed by curated information_schema views.
+
+space_id: "${var.genie_space_id__info_schema}"
+
+# ---------------------------------------------------------------------------
+# Tools
+# ---------------------------------------------------------------------------
+# Discovered via `agent-foundry brick mcp inspect catalog_genie
+# --instance portfolio-assistant --target dev`.  Managed Genie exposes
+# two tools whose upstream names embed the space UUID:
+#   - query_space_<uuid>     (run a natural-language query)
+#   - poll_response_<uuid>   (poll a long-running query)
+#
+# A literal allow-list would break the next time the space is
+# re-created (the UUID changes), so we glob-match the upstream
+# pattern and rename to a stable LLM-visible alias.  The wrapper
+# concatenates `<name_prefix><alias>` so the LLM ends up calling
+# `catalog_genie__query_space` and `catalog_genie__poll_response`.
+tools:
+  allow:
+    - match: "query_space_*"
+      expose_as: query_space
+    - match: "poll_response_*"
+      expose_as: poll_response

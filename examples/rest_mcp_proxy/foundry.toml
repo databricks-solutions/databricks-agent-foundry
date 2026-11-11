@@ -1,0 +1,24 @@
+#:schema ../../.agent-foundry/schemas/foundry-instance.schema.json
+#
+# Per-instance foundry.toml for the rest_mcp proxy example (issue #326).
+#
+# A proxy-only instance: the App hosts the ``rest_mcp`` payload and nothing
+# else -- no agent, no warehouse, no Genie.  ``agent-foundry init`` rewrites the
+# identity fields below (``name``, ``description``, ``schema_prefix``) to match
+# the project name you choose.
+#
+# Safety legend:
+#   SAFE TO CHANGE    -- deployer can freely modify
+#   CHANGE WITH CARE  -- must stay in sync with other config files
+
+# SAFE TO CHANGE: display name and description.  ``app_name`` derives from
+# ``name`` when omitted (Databricks Apps names are capped at 30 chars).
+name        = "rest-mcp-proxy"
+description = "REST-to-MCP proxy exposing the public GitHub REST API as a governed MCP server"
+
+# CHANGE WITH CARE: renaming requires a full redeploy -- every ${var.schema_prefix}
+# reference (UC securables, connection names) must update.
+schema_prefix = "rest_mcp_proxy"
+
+# No [warehouse] block: a proxy instance provisions no SQL warehouse (the
+# warehouse brick only runs when ``warehouse/config.yml`` is present).
