@@ -28,6 +28,7 @@ before. New projects get a scaffold that turns several on (see the table).
 | [Reasoning](#reasoning) | Users can read how the agent thought | `runtime.reasoning.*` | Endpoint default | Endpoint default | Thinking model |
 | [File and image input](#file-and-image-input) | Users attach spreadsheets, documents and images | `ui.file_upload.enabled` / `.images` | Yes | Yes | Vision model for images |
 | [Charts](#charts) | The agent draws interactive charts in the chat | `ui.charts.enabled` | On by default | Yes | Chat UI |
+| [Reports](#reports) | The agent writes reports users can download as Markdown | `ui.reports.enabled` | Yes | No | Chat UI |
 | [Feedback](#feedback) | Users rate answers with thumbs, a comment and tags | `ui.feedback.enabled` | On by default | Yes | Tracing (`MLFLOW_EXPERIMENT_ID`) |
 | [Resources panel](#resources-panel) | Users see and pick what the agent uses | `ui.resources_sidebar.enabled` | Yes | Yes | — |
 | [Speech input](#speech-input) | Users dictate a message instead of typing it | `ui.speech_input.enabled` | Yes | No | A Whisper serving endpoint |
@@ -485,13 +486,102 @@ spec:
       enabled: true   # on by default
 ```
 
-- **Types.** `bar`, `line`, `area`, `pie`, `scatter`. At most 500 rows.
+- **Types.** `bar`, `line`, `area`, `pie`, `scatter`, `sankey`. At most 500 rows.
+- **Axes and layout.** Optional `xType: "time"` for a real time scale,
+  `xName`, `yAxis` (`name`, `log`, `min`, `max`), `stacked` (bar, area) and
+  `horizontal` (bar). Conflicting options fall back to the code block.
+- **Second axis, marks and bubbles.** `y2` plots series against a right-hand
+  axis (`y2Axis`); `referenceLines` and `referenceBands` (up to five each)
+  mark targets and periods; `size` turns a scatter chart into a bubble chart.
+- **Flows.** `sankey` takes `x` as the source, `target` as the destination
+  and one `y` as the amount; repeated pairs are summed. At most 40 nodes, and
+  flows must not loop back. The toolbar can't switch it to another type.
 - **How to emit.** Put the chart spec in a fenced `echarts-chart` block, or
   call `payloads.agent.runtime.chart_helpers.render_chart` so the fence is
   valid before it reaches the UI.
-- **In the UI.** Users can switch chart type, download CSV, and click a
-  category to drill in. A bad spec falls back to the code block instead of
+- **Charts from SQL.** With a managed SQL MCP server mounted, the agent gets
+  `_chart(query, type, x, y, series?, ...)`. It re-runs the query read-only,
+  as the user, and shows the chart right after the tool call. The model gets
+  only a short summary (row count, x range, and per series and bubble size
+  the min and max with the x value where each occurs, and the last value), so
+  the rows never pass through it and charts aren't limited to the 50 rows a
+  SQL result shows. `series` pivots long-format rows into up to 12 series;
+  above 500 rows the tool asks the agent to aggregate instead.
+- **On later turns.** The model gets a one-line placeholder (type, title,
+  row count) instead of an earlier chart's data, so charts don't add input
+  tokens to every turn. Charts drawn by the `_chart` tool are left out
+  entirely, since the model already has the call and its summary. The
+  stored chat keeps the full chart.
+- **In the UI.** Users can switch chart type, download CSV or PNG, and click
+  a category to drill in. Charts with more than 50 x values get a zoom
+  slider. A bad spec falls back to the code block instead of
   breaking the chat.
+- **Mermaid diagrams.** A `mermaid` fenced block renders as a diagram
+  (flowcharts, sequence diagrams, `xychart-beta`, `pie`, ...), always on
+  and independent of `ui.charts`. Diagrams render with Mermaid's strict
+  security level; text that doesn't parse stays a code block. Each diagram
+  sits in a card with **Copy** (the Mermaid text) and **SVG** (download).
+  For charts of query results the agent uses `_chart`; Mermaid is for
+  diagrams.
+- **SVG images.** An `svg` fenced block renders as an image, in an answer
+  or a report, always on. The agent is told it can draw illustrations this
+  way (chat only; `/api/mcp` and A2A callers don't get that guidance). The
+  SVG is shown as an `<img>`, so a browser runs none of its scripts and
+  loads nothing it links to. Text that isn't a complete SVG document
+  (still streaming, a DOCTYPE, over 200,000 characters) stays a code
+  block. Each image sits in a card with **Copy** and **SVG** (download).
+
+## Reports
+
+`ui.reports.enabled` lets the agent write a report, a write-up or another
+document the user wants to keep, as a card in the chat. The card renders
+the Markdown and has **Copy**, **Markdown** and **HTML** buttons. Markdown
+saves the raw Markdown as a `.md` file. HTML saves the rendered report as
+one standalone page to send around: charts as embedded images, Mermaid
+diagrams as inline SVG, its own stylesheet and no scripts. It opens in any
+browser, and printing it there gives a clean PDF. When the switch is off
+the report stays a code block.
+
+```yaml
+spec:
+  ui:
+    reports:
+      enabled: true   # off by default
+```
+
+- **How the agent emits.** It calls `_report(title, markdown)`. The tool
+  wraps the report in a `markdown-report` fence long enough for any code
+  blocks inside it, names the file after the title, and shows the card
+  right after the tool call. The model gets a one-line confirmation. A
+  model or skill can also write the fence itself, with at least four
+  backticks so the report's own code blocks stay inside:
+
+  ~~~markdown
+  ````markdown-report:q3-review
+  # Q3 review
+  ...
+  ````
+  ~~~
+- **Filename.** The name in the fence, else the report's first `# `
+  heading, else `report`. Only lower-case letters, digits and single
+  hyphens are kept, at most 80 characters.
+- **Charts in a report.** With `ui.charts` on and the managed SQL server
+  mounted, `_report` also takes `charts`: up to 10 entries, each an `id`
+  plus the `_chart` fields. The report places each one with
+  `{{chart:<id>}}`, exactly once. The tool runs each query itself, as
+  `_chart` does, so the rows never pass through the model; the model gets
+  each chart's summary. If any chart fails, no report is shown and the
+  model gets the error.
+- **Limits.** At most 100,000 characters per report and 200 per title.
+- **Inside a report.** Tables, code blocks, charts and Mermaid diagrams
+  render as they do in the chat. Images only load from the App's own origin, and a downloaded
+  file keeps those links as they are, so they won't resolve outside the
+  App.
+- **On later turns.** A report filed by `_report` is left out of the
+  history the model gets, since the call already holds it. A report the
+  model wrote itself stays, so it can revise it. The stored chat keeps
+  every report.
+- **Chat only.** `/api/mcp` and A2A callers don't get `_report`.
 
 ## Feedback
 
@@ -596,6 +686,8 @@ them start with `_`.
 | `_remember`, `_recall`, `_forget`, `_list_memories` | Long-term memory | App service principal, bound to the user |
 | `_search_history`, `_read_history` | History search (compaction) | The user |
 | `_read_result` | Large SQL results | The user (read-only SQL) |
+| `_chart` | Charts | The user (read-only SQL) |
+| `_report` | Reports | Agent (shows the report; no data access) |
 
 ## What depends on what
 
@@ -612,11 +704,12 @@ flowchart BT
   PC["Prompt caching"] --> EG["Eager repo skills"]
   FB["Feedback"] --> TR["Tracing / MLflow experiment"]
   CHART["Charts"] --> UI["ui.enabled (chat UI)"]
+  REP["Reports"] --> UI
 ```
 
 Validation enforces these at load time: for example,
 Lakebase user skills without `ui.resources_sidebar.enabled` fail with
 `user_skills.store: lakebase requires spec.ui.resources_sidebar.enabled`.
 Feedback without a bound experiment still shows the buttons but does not
-write assessments. Charts need the chat UI; they have no other load-time
-check.
+write assessments. Charts and reports need the chat UI; they have no other
+load-time check.

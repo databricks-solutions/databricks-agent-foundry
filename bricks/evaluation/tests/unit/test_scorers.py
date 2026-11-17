@@ -61,9 +61,8 @@ class FakeFeedback:
 # ``mlflow.genai.scorers.Scorer``, whose ``__call__`` is typed as
 # ``(trace: Trace | None, ...) -> int | float | bool | str | Feedback
 # | list[Feedback]``.  Tests pass our duck-typed ``FakeTrace`` and
-# only ever exercise the ``Feedback`` / ``list[Feedback]`` branches
-# (the scorer functions themselves are typed ``Feedback | None`` and
-# ``list[Feedback]`` respectively).  The helpers below take the
+# only ever exercise the ``Feedback`` branch (the scorer functions
+# themselves are typed ``Feedback | None``).  The helpers below take the
 # ``cast`` once so test bodies can read ``result.value`` /
 # ``result.rationale`` directly without per-line ignores.
 
@@ -90,13 +89,6 @@ def _call_scalar_or_none(scorer: Any, **kwargs: Any) -> FakeFeedback | None:
     opt-out (``None``) branch of a scalar scorer's return contract.
     """
     return cast("FakeFeedback | None", scorer(**kwargs))
-
-
-def _call_list(scorer: Any, **kwargs: Any) -> list[FakeFeedback]:
-    """Invoke a multi-feedback scorer (``list[Feedback]``) and
-    narrow the mlflow union return type to ``list[FakeFeedback]``.
-    """
-    return cast("list[FakeFeedback]", scorer(**kwargs))
 
 
 # ---------------------------------------------------------------------------
@@ -555,93 +547,3 @@ class TestGenieSqlCorrectness:
             },
         )
         assert result.value is True
-
-
-# ---------------------------------------------------------------------------
-# Response quality scorer tests
-# ---------------------------------------------------------------------------
-
-
-class TestResponseQuality:
-    def test_good_response(self) -> None:
-        from bricks.evaluation.scorers.response_quality import response_quality
-
-        long_text = "This is a detailed response " * 5 + "based on the source table data."
-        trace = FakeTrace(
-            data=FakeTraceData(
-                spans=[
-                    FakeSpan(name="root", start_time_ns=0, end_time_ns=2_000_000_000),
-                ]
-            )
-        )
-        results = _call_list(
-            response_quality,
-            inputs={"question": "test"},
-            outputs={"response": long_text},
-            trace=trace,
-        )
-        assert isinstance(results, list)
-        assert len(results) == 3
-        names = {r.name for r in results}
-        assert names == {"response_length", "has_sources", "latency_ok"}
-
-        length_fb = next(r for r in results if r.name == "response_length")
-        assert length_fb.value is True
-
-        sources_fb = next(r for r in results if r.name == "has_sources")
-        assert sources_fb.value is True
-
-        latency_fb = next(r for r in results if r.name == "latency_ok")
-        assert latency_fb.value is True
-
-    def test_short_response(self) -> None:
-        from bricks.evaluation.scorers.response_quality import response_quality
-
-        results = _call_list(
-            response_quality,
-            inputs={"question": "test"},
-            outputs={"response": "Short answer."},
-            trace=None,
-        )
-        length_fb = next(r for r in results if r.name == "response_length")
-        assert length_fb.value is False
-
-    def test_no_sources(self) -> None:
-        from bricks.evaluation.scorers.response_quality import response_quality
-
-        long_text = "This is a response without any references " * 3
-        results = _call_list(
-            response_quality,
-            inputs={"question": "test"},
-            outputs={"response": long_text},
-            trace=None,
-        )
-        sources_fb = next(r for r in results if r.name == "has_sources")
-        assert sources_fb.value is False
-
-    def test_high_latency(self) -> None:
-        from bricks.evaluation.scorers.response_quality import response_quality
-
-        trace = FakeTrace(
-            data=FakeTraceData(
-                spans=[
-                    FakeSpan(name="root", start_time_ns=0, end_time_ns=60_000_000_000),
-                ]
-            )
-        )
-        results = _call_list(
-            response_quality,
-            inputs={"question": "test"},
-            outputs={"response": "answer " * 25},
-            trace=trace,
-        )
-        latency_fb = next(r for r in results if r.name == "latency_ok")
-        assert latency_fb.value is False
-
-    def test_none_outputs(self) -> None:
-        from bricks.evaluation.scorers.response_quality import response_quality
-
-        results = _call_list(response_quality, inputs=None, outputs=None, trace=None)
-        assert len(results) == 2  # no trace = no latency check
-        length_fb = next(r for r in results if r.name == "response_length")
-        assert length_fb.value is False

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 # Databricks Apps OBO (on-behalf-of) user authorization scopes.  This is
 # the closed set the Apps platform accepts for ``user_api_scopes``; an
@@ -58,11 +58,18 @@ class AgentAppConfig(BaseModel):
     ``user_authorization`` is a closed enum of OBO scopes
     (:data:`UserApiScope`) so a misspelled scope fails the deploy
     instead of being silently sent to (and rejected by) the API.
+
+    ``instances`` turns on Databricks Apps horizontal scaling with a fixed
+    instance count.  ``None`` leaves the App's scaling untouched, and
+    removing the key does not convert a scaled App back to a standard one
+    (the platform only offers that in the App's Settings page).  The upper
+    bound is the workspace quota (5 by default), enforced by the API.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     compute_size: Literal["medium", "large"] = "medium"
+    instances: int | None = Field(default=None, ge=1)
     # Host's declaration of which payload(s) to mount in the App
     # container (issue #338).  ``app/`` is a generic host; each named
     # payload owns its runtime surface under ``payloads/<name>/`` (config,

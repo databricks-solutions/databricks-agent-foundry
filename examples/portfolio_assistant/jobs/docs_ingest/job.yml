@@ -1,20 +1,32 @@
 # yaml-language-server: $schema=../../../../.agent-foundry/schemas/job_config.schema.json
 
 name: "${var.target_name}-${var.app_name}-docs-ingest"
-description: "Ingest uploaded documentation and refresh the docs Vector Search index"
+description: "Parse and chunk uploaded documents, then refresh the docs Vector Search index"
 
 tasks:
-  - task_key: ingest_docs
-    notebook_task:
-      notebook_path: ./notebooks/ingest_docs.py
-      base_parameters:
-        catalog: "${var.catalog}"
-        schema: "${var.schema_prefix}_indexes"
-        volume: docs_sources
-        table: docs
-        vs_index: "${var.vs_index_name__docs_search}"
-    timeout_seconds: 1800
+  - task_key: ingest
+    sql_task:
+      warehouse_id: "${var.warehouse_id}"
+      file:
+        path: ./sql/ingest_chunks.sql
+      parameters:
+        volume_path: "/Volumes/${var.catalog}/${var.schema_prefix}_indexes/docs_sources/"
+        chunks_table: "${var.catalog}.${var.schema_prefix}_indexes.docs_chunks"
+    timeout_seconds: 3600
     max_retries: 1
+
+  - task_key: sync_index
+    depends_on:
+      - task_key: ingest
+    notebook_task:
+      notebook_path: ./notebooks/sync_index.py
+      base_parameters:
+        vs_index: "${var.vs_index_name__docs_search}"
+    timeout_seconds: 600
+    # The sync API rejects a request while a previous sync still runs;
+    # a later retry also picks up rows written after that sync started.
+    max_retries: 5
+    min_retry_interval_millis: 120000
 
 trigger:
   file_arrival:

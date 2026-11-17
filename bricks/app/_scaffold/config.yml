@@ -29,6 +29,12 @@ payloads:
 # One of: medium (default) | large. Large costs more than medium.
 compute_size: "medium"
 
+# Horizontal scaling: a fixed number of instances behind one App URL.
+# Unset (default) leaves the App's scaling untouched. Cost scales with
+# the count; the default quota is 5 per App and 20 scaled Apps per
+# workspace. Removing the key does not revert to a standard App.
+# instances: 2
+
 # ---------------------------------------------------------------
 # App Resources -- granted to the app's service principal
 # ---------------------------------------------------------------

@@ -67,6 +67,7 @@ import {
 } from './reasoning-replay';
 import { reasoningReplayStore, replayEntriesForChat } from './reasoning-replay-store';
 import { inlineFileAttachments } from './inline-file-attachments';
+import { omitChartData } from './chart-fence-placeholder';
 import { withoutRefusedTurns } from './refused-turns';
 import {
  applyCompaction,
@@ -307,9 +308,13 @@ traceId: null,
  // Agent Bricks (#637): likewise, the compaction summary replaces the turns
  // before its boundary for the model request only, and refused turns are
  // left out so a refused prompt is not sent again.
+ // Agent Bricks: chart fences in earlier assistant turns become a short
+ // placeholder, so their inline data is not re-sent on every turn.
  const compaction = await compactionPromise;
- const modelUiMessages = inlineFileAttachments(
+ const modelUiMessages = omitChartData(
+ inlineFileAttachments(
  applyCompaction(withoutRefusedTurns(uiMessages, compaction?.boundaryMessageId), compaction),
+ ),
  );
  const modelMessages = await convertToModelMessages(modelUiMessages, {
  ignoreIncompleteToolCalls: true,

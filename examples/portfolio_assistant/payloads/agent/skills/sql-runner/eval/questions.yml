@@ -7,7 +7,7 @@ questions:
     expected_tools:
       - sql-runner   # lazy-mode skill_id; eager-mode also matches sql_warehouse__execute_statement substring
 
-  # Edge case: query that catalog_genie cannot express (window function),
+  # Edge case: query the curated catalog views cannot express (window function),
   # the agent should draft SQL and use sql-runner.  Routing-only check:
   # the SQL itself lives in the tool input pane, not in chat output.
   - input: "Across all catalogs, give me the rolling 30-day count of new tables per schema using a window function."

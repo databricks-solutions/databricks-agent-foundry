@@ -221,6 +221,8 @@ uv run agent-foundry monitors stop   --instance <your-app> --target dev
 uv run agent-foundry monitors delete --instance <your-app> --target dev
 ```
 
+Both commands read the scorer lists from `instances/<your-app>/evaluation/eval_config.yml`. To add your own scorers, put `@scorer` functions in `instances/<your-app>/evaluation/scorers/*.py` and list them by name; see [Instance scorers](../../bricks/evaluation/README.md#instance-scorers). `eval --dry-run` prints the resolved scorer list.
+
 ## Calling a deployed agent
 
 Install the optional `[call]` extra once:

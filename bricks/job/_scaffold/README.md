@@ -17,3 +17,7 @@ The active example uses a paused file-arrival trigger plus a serverless
 `environments` block. Uncomment `schedule`, `continuous`, `job_clusters`,
 or other sections as needed; do not enable more than one of
 `trigger` / `schedule` / `continuous`.
+
+For a working document-ingestion job (a SQL file that parses and chunks
+uploaded files into a Vector Search source table, then a notebook that
+syncs the index), copy `examples/portfolio_assistant/jobs/docs_ingest/`.

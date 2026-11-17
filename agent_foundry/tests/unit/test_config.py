@@ -6,12 +6,14 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from agent_foundry.config import (
     TAG_KEY_MANAGED_BY,
     DeploymentState,
     EvaluationConfig,
     InstanceConfig,
+    ScorerSpec,
     TargetConfig,
     WarehouseConfig,
     load_state_outputs,
@@ -339,6 +341,20 @@ class TestSubModelDefaults:
         e = EvaluationConfig()
         assert e.max_traces == 100
         assert e.scorers == {}
+
+    def test_evaluation_config_accepts_name_and_spec_entries(self):
+        e = EvaluationConfig(
+            scorers={"default": ["Safety", {"name": "Guidelines", "args": {"guidelines": "Be grounded."}}]},
+        )
+        plain, spec = e.scorers["default"]
+        assert plain == "Safety"
+        assert isinstance(spec, ScorerSpec)
+        assert spec.name == "Guidelines"
+        assert spec.args == {"guidelines": "Be grounded."}
+
+    def test_scorer_spec_rejects_unknown_keys(self):
+        with pytest.raises(ValidationError):
+            ScorerSpec.model_validate({"name": "Guidelines", "arg": {}})
 
     def test_deployment_state_all_none(self):
         s = DeploymentState()

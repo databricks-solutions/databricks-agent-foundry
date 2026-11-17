@@ -66,6 +66,13 @@ class TestCsv:
         result = extract_file(b"a|b,c\n1,2", "t.csv")
         assert r"a\|b" in result.text
 
+    def test_binary_renamed_csv_is_rejected(self) -> None:
+        # A binary (e.g. an executable) renamed ``.csv`` must surface a
+        # user-safe ExtractionError, not a raw csv.Error.
+        elf = b"\x7fELF" + bytes(range(256)) * 4
+        with pytest.raises(ExtractionError, match="not valid CSV"):
+            extract_file(elf, "malware.csv")
+
 
 class TestCaps:
     def test_char_cap_truncates_with_notice(self) -> None:

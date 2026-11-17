@@ -48,6 +48,39 @@ const PORT =
   process.env.PORT ||
   (isDevelopment ? 3001 : 3000);
 
+// Don't advertise the framework.
+app.disable('x-powered-by');
+
+// Content-Security-Policy shipped in Report-Only mode: it logs violations to
+// the browser console (and any report endpoint) without blocking, so the SPA
+// cannot white-screen. Promote to the enforcing `Content-Security-Policy`
+// header once real traffic shows no legitimate violations. `img-src` is
+// same-origin plus data:/blob: for chart canvases and upload previews;
+// `style-src` keeps 'unsafe-inline' because Tailwind and ECharts inject
+// inline styles.
+const CSP_REPORT_ONLY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "worker-src 'self' blob:",
+  "frame-ancestors 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+].join('; ');
+
+// Baseline security headers. Permissions-Policy is left unset so it cannot
+// break microphone-based speech input on instances that enable it.
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Content-Security-Policy-Report-Only', CSP_REPORT_ONLY);
+  next();
+});
+
 // CORS configuration
 app.use(
   cors({

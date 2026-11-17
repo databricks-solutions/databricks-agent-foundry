@@ -122,14 +122,14 @@ referenced by the paired `mcp_servers/<api>/server.yml`
 (`connection_name: ${var.rest_mcp_connection__<api>}`), which is why "no
 agent-runtime changes" holds.
 
-## MCP registration paths — and why this payload uses the external connection
+## MCP registration paths — external connection and Unity Gateway discovery
 
 Databricks ships **three** MCP categories: **Managed** (native — UC functions,
 Genie, Vector Search), **External** (a server outside Databricks, reached
 through a UC HTTP connection), and **Custom** (your own server hosted as a
-Databricks App at `{app_url}/mcp`). A reasonable question is *"we host an app —
-why not register it as a Custom MCP server?"* This section answers that so the
-choice is not mistaken for a workaround.
+Databricks App at `{app_url}/mcp`). This payload supports the Custom path (A)
+and the external connection (B) at the same time; this section explains how
+they relate.
 
 The key insight is a **layering model**, not three parallel choices. There is one
 *substrate* (the actual MCP endpoint) and separate ways to *consume / govern* it:
@@ -140,8 +140,8 @@ SUBSTRATE (the MCP endpoint itself)
   └─ custom app  {app_url}/mcp   ← we host this
        │
   CONSUMPTION / GOVERNANCE
-  ├─ A. Custom-app (Playground-native)  Playground discovers the app directly. No connection.
-  ├─ B. External UC connection          is_mcp HTTP connection -> type: external.   ← THIS PAYLOAD
+  ├─ A. Custom-app (Playground-native)  Playground discovers the app directly. No connection.   ← single-API proxies
+  ├─ B. External UC connection          is_mcp HTTP connection -> type: external.             ← every proxy
   └─ C. MCP Service                     a UC securable built ON TOP of a (B) connection -> AI Gateway governance
 ```
 
@@ -149,29 +149,38 @@ So **C is not a third substrate — it is layered on top of a B connection**
 (Databricks docs: "Create the MCP Service *from that connection*"). That
 connection's target can be either an external server or our app.
 
-| | **A. Custom app (Playground-native)** | **B. External UC connection** *(shipped)* | **C. MCP Service** (on top of B) |
+| | **A. Custom app (Playground-native)** | **B. External UC connection** | **C. MCP Service** (on top of B) |
 |---|---|---|---|
 | UC connection | none | `is_mcp` HTTP | created *from* the B connection |
+| Caller reaches | the App URL directly | the UC gateway | the UC gateway |
 | Governance | Apps permissions only | connection grants | tool selection, service policies, rate limits, audit, grants |
-| Multi-API (`/mcp/<api>/`) | **awkward** — expects one `/mcp` per app | **clean** — one connection per API | clean — one service per connection |
-| Naming constraint | **app must be `mcp-…`** | none | none |
+| Multi-API (`/mcp/<api>/`) | **one server per App** at `/mcp` | **clean** — one connection per API | clean — one service per connection |
+| Naming constraint | **App name must start with `mcp-`** | none | none |
 | Maturity | GA-ish, documented | GA-ish (first-gen external) | **Beta** (account previews) |
 
-**Why not A (Custom-app), even though it is a real, documented feature.** The
-Playground-native path is legitimate (the `mcp-` app-name prefix is an official
-recognition rule, not a hack) — it is simply the wrong fit for *this* payload:
+### Unity Gateway discovery (path A)
 
-1. **The `mcp-` prefix collides with framework naming.** Agent-Foundry apps are
-   named `dev-<instance>-app`; A only works if the app itself is named `mcp-…`.
-   Adopting it would mean bending the framework's app-naming convention.
-2. **Single `/mcp` vs. our multi-API `/mcp/<api>/`.** Playground auto-discovery
-   assumes one MCP per app; this payload's whole point is *one app fronts N APIs*,
-   each its own mount + connection. A would force one-API-per-app.
+Unity Gateway and AI Playground only discover an App-hosted MCP server when
+the **App name starts with `mcp-`**. The `rest_mcp` adapter therefore names
+its App `mcp-<target>-<app_name>` (for example `mcp-dev-github`) instead of
+the framework default `<target>-<app_name>-app`. You configure nothing: the
+adapter owns the name through the framework's optional `AppNamingAdapter`
+hook.
 
-Path **B** sidesteps both — no naming rule, and per-API connections map exactly
-onto the multi-mount design. That is why the shipped payload registers each API
-as an external `is_mcp` connection. (A single-API, Playground-discoverable server
-is a legitimate but *different, simpler* shape — not this payload.)
+- **One API per App.** Discovery expects the server at the App's `/mcp`. A
+  single-API proxy is served there in addition to `/mcp/<api>/`. A proxy with
+  several APIs has no `/mcp` root (deploy prints a note), so use the B
+  connections for those.
+- **Callers connect directly to the App.** They need `CAN USE` on the App and
+  an OAuth token; Apps reject personal access tokens. Grant `CAN USE` to the
+  users or groups who should see the server.
+- **Per-caller identity** needs Apps user authorization (`user_authorization`
+  scopes in `app/config.yml`) plus `auth: obo` on the API, so the upstream call
+  uses the forwarded user token. See #835 for the open design questions.
+- **Existing deployments get a new App.** Apps can't be renamed, so the first
+  deploy after upgrading creates `mcp-…` next to the old `…-app`. The B
+  connections follow automatically (they detect the new App URL and service
+  principal); delete the old App by hand.
 
 ## Optional governance layer (Beta): the UC MCP Service (path C)
 
@@ -217,10 +226,26 @@ works via `type: external`**, so deploy never fails on account of the service.
 
 > **Govern-only caveat.** AI Gateway policies/rate-limits are enforced **only
 > when the service is invoked through the gateway URL**
-> (`/ai-gateway/mcp-services/…`). This payload keeps agent consumption on the
-> reliable `type: external` connection, so the full governance surface (tool
-> selection, policies, rate limits, grants) is **provisioned and shelf-ready**
-> but not on the hot path until a later phase flips consumption to the gateway.
+> (`/ai-gateway/mcp-services/…`). The scaffold keeps agent consumption on the
+> `type: external` connection, which works without the Beta previews. To put
+> the governance surface on the hot path, pin the service in the agent's
+> `payload.yml` instead of the `server.yml`:
+>
+> ```yaml
+> spec:
+>   runtime:
+>     tools:
+>       mcp:
+>         gateway:
+>           pinned:
+>             - fqn: "${var.rest_mcp_service__example_api}"
+>               identity: sp       # deploy grants the agent App EXECUTE
+>               tools:
+>                 allow: [get_item]
+> ```
+>
+> `rest_mcp_service__<api>` is published only after the service is deployed;
+> until then the agent deploy fails instead of running without the tools.
 
 > **Known limitation — AI Playground cannot render governed (non-ALLOW)
 > responses (upstream bug, fix in flight).** The MCP Service itself works: every

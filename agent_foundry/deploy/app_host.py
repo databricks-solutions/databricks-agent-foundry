@@ -112,6 +112,7 @@ class AppInfraSpec(BaseModel):
     user_scopes: list[str] = []
     sp_grants: list[dict[str, Any]] = []
     compute_size: str = "medium"
+    instances: int | None = None
     telemetry_destination: str | None = None
 
 
@@ -458,6 +459,7 @@ def _has_unresolved_vars(obj: Any) -> bool:
 # framework owns those collections in full on every redeploy.
 _CORE_UPDATE_MASK = "compute_size,resources,user_api_scopes"
 _TELEMETRY_UPDATE_FIELD = "telemetry_export_destinations"
+_INSTANCES_UPDATE_MASK = "compute_min_instances,compute_max_instances"
 
 
 def telemetry_export_destinations(destination: str | None) -> list[TelemetryExportDestination]:
@@ -529,6 +531,32 @@ def _build_app(
     )
 
 
+def scaling_steps(existing: App | None, instances: int) -> list[int]:
+    """The instance counts to apply, in order, to reach *instances*.
+
+    A standard App (no instance count yet) must convert to horizontal
+    scaling at exactly 1 instance before it can scale further.
+    """
+    current_min = existing.compute_min_instances if existing else None
+    current_max = existing.compute_max_instances if existing else None
+    if current_min == instances and current_max == instances:
+        return []
+    if current_min is None and instances > 1:
+        return [1, instances]
+    return [instances]
+
+
+def _reconcile_instances(ws: WorkspaceClient, app_name: str, existing: App | None, instances: int) -> None:
+    steps = scaling_steps(existing, instances)
+    if not steps:
+        print(f"  Instance count already {instances}.")
+        return
+    for count in steps:
+        print(f"  Setting instance count to {count} ...")
+        app = App(name=app_name, compute_min_instances=count, compute_max_instances=count)
+        ws.apps.create_update_and_wait(app_name, update_mask=_INSTANCES_UPDATE_MASK, app=app)
+
+
 def reconcile_app_spec(
     ws: WorkspaceClient | None,
     app_name: str,
@@ -538,9 +566,10 @@ def reconcile_app_spec(
     compute_size: str,
     dry_run: bool,
     telemetry_destination: str | None = None,
+    instances: int | None = None,
 ) -> None:
-    """Reconcile the Databricks App *spec* (compute size, resources, OBO
-    scopes, telemetry export) via the typed SDK -- creating the app when
+    """Reconcile the Databricks App *spec* (compute size, instance count,
+    resources, OBO scopes, telemetry export) via the typed SDK -- creating the app when
     absent or updating it in place via the async ``create_update`` API
     otherwise.
 
@@ -553,6 +582,9 @@ def reconcile_app_spec(
        must succeed.  ``compute_size`` resize is supported here because
        ``create_update`` is the async update API the synchronous
        ``apps.update`` PATCH pointed callers to.
+       Then the instance count, only when *instances* is set -- must
+       succeed too.  Without it the scaling fields are never in an update
+       mask, so a count set by hand in the App UI survives redeploys.
     2. UC securable resources -- best-effort; a failure leaves phase 1
        intact.
     3. Telemetry export -- best-effort, only when *telemetry_destination*
@@ -568,6 +600,8 @@ def reconcile_app_spec(
     telemetry = telemetry_export_destinations(telemetry_destination)
     if dry_run:
         print(f"  [dry-run] Would set compute_size={compute_size} on {app_name}")
+        if instances is not None:
+            print(f"  [dry-run] Would set instance count to {instances} on {app_name}")
         if resources:
             print(f"  [dry-run] Would set {len(resources)} app resource(s) on {app_name}:")
             for r in resources:
@@ -609,6 +643,8 @@ def reconcile_app_spec(
         )
         create_app_with_retry(ws, core_app)
     print("  Core app spec applied successfully.")
+    if instances is not None:
+        _reconcile_instances(ws, app_name, existing, instances)
 
     if uc_resources:
         full_app = _build_app(app_name, description, compute_size, core_resources + uc_resources, user_scopes)
@@ -973,6 +1009,7 @@ def deploy_on_host(
             infra.compute_size,
             dry_run=True,
             telemetry_destination=infra.telemetry_destination,
+            instances=infra.instances,
         )
         payload.after_reconcile(None, app_name, variables, dry_run=True)
         grant_sp_permissions(None, app_name, infra.sp_grants, warehouse_id, dry_run=True)
@@ -1009,6 +1046,7 @@ def deploy_on_host(
             infra.compute_size,
             dry_run=False,
             telemetry_destination=infra.telemetry_destination,
+            instances=infra.instances,
         )
         # Optional payload heal hook -- runs *after* the spec reconcile
         # (any rotated App SP / new role now exists) and *before* the code

@@ -20,10 +20,12 @@ if TYPE_CHECKING:
     # runtime imports live in the callers to keep the import-cycle
     # profile unchanged.
 
+    from payloads.agent.runtime.chart_tool import AgentChartTool
     from payloads.agent.runtime.gateway_skills import GatewaySkills
     from payloads.agent.runtime.history_search import AgentHistorySearch
     from payloads.agent.runtime.memory import AgentMemory
     from payloads.agent.runtime.plan_tools import AgentPlan
+    from payloads.agent.runtime.report_tool import AgentReportTool
     from payloads.agent.runtime.sql_result_read import AgentResultReader
 
 from payloads.agent.runtime.instructions import (
@@ -99,6 +101,9 @@ def create_agent(
     plan: AgentPlan | None = None,
     history_search: AgentHistorySearch | None = None,
     result_reader: AgentResultReader | None = None,
+    chart_tool: AgentChartTool | None = None,
+    report_tool: AgentReportTool | None = None,
+    chat_guidance: str = "",
     unavailable_mcp: Sequence[UnavailableServer] = (),
 ) -> Agent:
     """Create an Agent instance from resolved config and wrapped tools.
@@ -156,6 +161,15 @@ def create_agent(
     *result_reader* (a managed SQL server with the read-only tool mounted)
     adds ``_read_result`` and its guidance after that.
 
+    *chart_tool* (charts enabled in the UI, same SQL server) adds
+    ``_chart`` and its guidance after that.
+
+    *report_tool* (reports enabled in the UI) adds ``_report`` and its
+    guidance after that; with a chart source it also takes ``charts``.
+
+    *chat_guidance* (chat requests only, see
+    :mod:`payloads.agent.runtime.chat_rendering`) follows.
+
     *unavailable_mcp* names the configured MCP servers this request could
     not mount; the note goes into the uncached tail, so a server going
     down or coming back does not invalidate the prompt cache.
@@ -183,6 +197,14 @@ def create_agent(
     if result_reader is not None:
         all_tools.extend(result_reader.tools)
         base_prompt = f"{base_prompt}\n\n{result_reader.guidance}"
+    if chart_tool is not None:
+        all_tools.extend(chart_tool.tools)
+        base_prompt = f"{base_prompt}\n\n{chart_tool.guidance}"
+    if report_tool is not None:
+        all_tools.extend(report_tool.tools)
+        base_prompt = f"{base_prompt}\n\n{report_tool.guidance}"
+    if chat_guidance:
+        base_prompt = f"{base_prompt}\n\n{chat_guidance}"
     if prompt_manuals:
         base_prompt = f"{base_prompt}\n\n{prompt_manuals}"
     if data_universe:

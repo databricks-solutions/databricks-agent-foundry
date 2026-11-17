@@ -9,10 +9,13 @@
 #     one tool-heavy turn; compaction stays below clearing as scaffolded;
 #   - long-term memory and the per-chat plan, each checked by a smoke probe;
 #   - speech input on the Whisper endpoint of the ``speech_input`` scaffold
-#     (model_serving/speech), checked by a synthetic-clip smoke probe.
+#     (model_serving/speech), checked by a synthetic-clip smoke probe;
+#   - Markdown reports (the ``_report`` tool and the report card).
 payload:
   spec:
     ui:
+      reports:
+        enabled: true
       speech_input:
         enabled: true
         endpoint: ${var.serving_endpoint_name__speech}

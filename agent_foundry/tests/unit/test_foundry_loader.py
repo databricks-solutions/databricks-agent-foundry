@@ -150,6 +150,25 @@ def test_load_instance_config_threads_target_into_runtime_model(
     assert cfg.target.profile == "dev-profile"
 
 
+def test_app_resource_name_defaults_without_a_naming_adapter(single_instance_repo: Path) -> None:
+    cfg = load_instance_config(single_instance_repo, target_name="dev")
+    assert cfg.app_resource_name == "dev-portfolio-assistant-app"
+
+
+def test_payload_adapter_owns_the_app_resource_name(single_instance_repo: Path) -> None:
+    _write(
+        single_instance_repo / "instances" / "portfolio-assistant" / "payloads" / "rest_mcp" / "payload.yml",
+        """
+        payload:
+          adapter: rest_mcp
+          spec: {}
+        """,
+    )
+    cfg = load_instance_config(single_instance_repo, target_name="dev")
+    assert cfg.app_resource_name == "mcp-dev-portfolio-assistant"
+    assert cfg.to_variables()["app_resource_name"] == "mcp-dev-portfolio-assistant"
+
+
 def test_foundry_toml_rejects_chat_history_block(tmp_path: Path) -> None:
     """Hard cutover (2.0): UI toggles moved out of the framework
     authoring surface into the agent payload spec.  A leftover

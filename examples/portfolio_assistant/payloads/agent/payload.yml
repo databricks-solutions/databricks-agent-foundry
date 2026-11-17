@@ -79,10 +79,17 @@ payload:
         - Reference every view by its full three-part name, back-quoting each part:
           `` `<catalog>`.`<view_schema>`.`<view_name>` ``. Take all three from the
           data universe rather than assuming a schema.
-      max_tool_calls_per_turn: 5
+      # Genie One answers asynchronously: one ask plus a few polls.
+      max_tool_calls_per_turn: 10
       max_iterations: 10
       tools:
         # mcp_only: true  # (default) attach tools only via MCP servers
+        mcp:
+          gateway:
+            pinned:
+              # Reads data, so it runs as the user and sees only what they may.
+              - fqn: "system.ai.genie_one_mcp"
+                identity: obo
         # Skill-loading mode (eager|lazy, issue #98).  Eager here because
         # prompt caching is on below, and the two are mutually exclusive:
         # lazy skill bodies arrive as tool results behind the cached
@@ -91,9 +98,15 @@ payload:
         # alongside caching warns and switches to eager anyway.
         skills:
           loading: eager
-          # The skills/ folder (sql-runner); on by default, shown for clarity.
+          # The skills/ folder; on by default, shown for clarity.
           repository:
             enabled: true
+          # Each user writes and picks their own skills in the resources
+          # panel; store: lakebase keeps them in the chat-history Lakebase
+          # (needs ui.chat_history and ui.resources_sidebar).
+          user_skills:
+            enabled: true
+            store: lakebase
           # Prose shown above the lazy-mode skill index.  Omit to
           # inherit DEFAULT_SKILL_ROUTING_HEADER (payloads/agent/contracts.py).
           # routing_header: |
@@ -142,6 +155,14 @@ payload:
           keep_tool_uses: 3
           clear_at_least_chars: 300000
           clear_above_input_tokens: 150000
+        # A goal and milestones the agent keeps for multi-step work in a
+        # chat and sees before every model call; deleted with the chat.
+        plan:
+          enabled: true
+        # Facts about the user the agent saves and recalls across all of
+        # their chats, kept per user in the chat-history Lakebase.
+        memory:
+          enabled: true
     ui:
       enabled: true
       kind: chat
@@ -150,12 +171,30 @@ payload:
         enabled: true
         # project_name: "portfolio-assistant-lakebase"  # optional override
       file_upload:
-        enabled: false
+        enabled: true
         # max_mb: 10  # hard upload size cap (default 10)
+        # PNG / JPEG / WebP go to the model as images; needs a vision model.
+        images: true
       feedback:
         enabled: true
       charts:
         enabled: true
+      # Markdown reports the user can copy or download as .md.
+      reports:
+        enabled: true
+      # Side panel listing the agent's MCPs and skills and the user's own
+      # skills (runtime.tools.skills.user_skills).
+      resources_sidebar:
+        enabled: true
+      # Mic button in the composer. Off here because it needs a Whisper
+      # serving endpoint on a GPU: `agent-foundry scaffold speech_input`
+      # adds one (model_serving/speech/), or point `endpoint` at an
+      # existing Whisper endpoint.
+      speech_input:
+        enabled: false
+        # endpoint: ${var.serving_endpoint_name__speech}
+        # max_seconds: 300        # 1..300
+        # language: de            # hint; unset = browser language
       # Tool panels start collapsed: this agent's SQL calls return wide
       # result tables, and expanding every one of them by default buries
       # the actual answer. Flip to true to audit each call inline.

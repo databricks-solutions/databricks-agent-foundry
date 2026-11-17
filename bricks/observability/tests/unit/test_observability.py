@@ -304,6 +304,13 @@ class TestDashboardTemplate:
         assert "source_type" in query
         assert "HUMAN" in query
 
+    def test_quality_scores_include_llm_judges(self, template: dict[str, Any]) -> None:
+        """Built-in judges (Safety, RelevanceToQuery) log LLM_JUDGE assessments, code scorers log CODE."""
+        ds = next(d for d in template["datasets"] if d["name"] == "ds_quality_scores")
+        query = " ".join(ds["queryLines"])
+        assert "'CODE'" in query
+        assert "'LLM_JUDGE'" in query
+
     def test_feedback_categories_dataset_exists(self, template: dict[str, Any]) -> None:
         ds_names = {ds["name"] for ds in template["datasets"]}
         assert "ds_feedback_categories" in ds_names

@@ -154,6 +154,27 @@ class AppPayloadAdapter(Protocol):
         ...
 
 
+@runtime_checkable
+class AppNamingAdapter(Protocol):
+    """Optional: a payload adapter that owns its App's resource name.
+
+    Kept out of :class:`AppPayloadAdapter` so adapters that do not implement
+    it still satisfy that runtime-checked protocol.
+    """
+
+    def app_resource_name(self, default: str) -> str:
+        """The App resource name to use instead of the framework *default*."""
+        ...
+
+
+def payload_app_resource_name(instance_dir: Path, default: str) -> str:
+    """The App resource name for *instance_dir*: the adapter's, or *default*."""
+    adapter = get_payload_adapter(load_payload_config(instance_dir).adapter)
+    if isinstance(adapter, AppNamingAdapter):
+        return adapter.app_resource_name(default)
+    return default
+
+
 def load_payload_config(instance_dir: Path | None) -> PayloadConfig:
     """Read the generic payload manifest (``payloads/<payload>/payload.yml``).
 

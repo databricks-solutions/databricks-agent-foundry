@@ -146,6 +146,12 @@ class TestCreateAgentInstructions:
         assert asyncio.run(agent.get_system_prompt(MagicMock())) == "Base.\n\n## Earlier turns\n\n## Large SQL results"
         assert tool in agent.tools
 
+    def test_chat_guidance_precedes_the_manuals(self) -> None:
+        config = {"SYSTEM_PROMPT": "Base.", "LLM_ENDPOINT_NAME": "test-model", "INJECT_TIME_USER": False}
+        agent = create_agent(config, tools=[], chat_guidance="## Images", prompt_manuals="## Manuals")
+
+        assert agent.instructions == "Base.\n\n## Images\n\n## Manuals"
+
     def test_unavailable_mcp_note_is_in_the_uncached_tail(self) -> None:
         config = {"SYSTEM_PROMPT": "Base.", "LLM_ENDPOINT_NAME": "test-model", "INJECT_TIME_USER": False}
         agent = create_agent(config, tools=[], unavailable_mcp=(UnavailableServer("jira", "connect_failed"),))

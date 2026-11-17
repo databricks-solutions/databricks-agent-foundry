@@ -30,45 +30,46 @@ from typing import Any
 
 from agent_foundry.bricks import load_brick_variables
 from agent_foundry.variables import add_project_root_arg
-from bricks.evaluation.config import load_eval_config
+from bricks.evaluation.config import get_experiment_name, load_eval_config
 
 # ---------------------------------------------------------------------------
 # Scorer resolution for production
 # ---------------------------------------------------------------------------
 
 
-def resolve_prod_scorers(config: dict[str, Any]) -> list[tuple[str, Any]]:
+def resolve_prod_scorers(
+    config: dict[str, Any],
+    instance_dir: Path | None = None,
+) -> list[tuple[str, Any]]:
     """Build (name, scorer) pairs for production monitoring.
+
+    Scorers from ``<instance_dir>/evaluation/scorers/*.py`` can be listed
+    alongside built-in judges and framework scorers.
 
     Returns a list of tuples: (registration_name, scorer_instance).
     """
-    from bricks.evaluation.scorers.builtin import get_builtin_judges
-    from bricks.evaluation.scorers.genie_accuracy import genie_sql_correctness
-    from bricks.evaluation.scorers.response_quality import response_quality
-    from bricks.evaluation.scorers.routing import tool_routing_accuracy
+    from bricks.evaluation.scorers.builtin import (
+        BUILTIN_JUDGE_NAMES,
+        get_builtin_judges,
+        parse_scorer_entry,
+    )
+    from bricks.evaluation.scorers.registry import build_custom_registry
 
-    builtin_names = {
-        "Safety",
-        "RelevanceToQuery",
-        "RetrievalGroundedness",
-        "Correctness",
-        "ToolCallCorrectness",
-        "Guidelines",
-    }
-    custom_registry = {
-        "tool_routing_accuracy": tool_routing_accuracy,
-        "genie_sql_correctness": genie_sql_correctness,
-        "response_quality": response_quality,
-    }
+    custom_registry = build_custom_registry(instance_dir)
 
     prod_config = config.get("production_monitoring", {})
-    scorer_names = prod_config.get("scorers", [])
+    scorer_entries = prod_config.get("scorers", [])
 
     result: list[tuple[str, Any]] = []
-    for name in scorer_names:
-        if name in builtin_names:
-            judges = get_builtin_judges([name])
-            result.append((name.lower(), judges[0]))
+    for entry in scorer_entries:
+        name, args = parse_scorer_entry(entry)
+        if name in BUILTIN_JUDGE_NAMES:
+            judge = get_builtin_judges([entry])[0]
+            # Plain entries keep their historical registration name so
+            # already-registered monitors are not duplicated.
+            result.append((judge.name if args else name.lower(), judge))
+        elif args:
+            raise ValueError(f"Custom scorer '{name}' does not take args")
         elif name in custom_registry:
             result.append((name, custom_registry[name]))
         else:
@@ -80,11 +81,6 @@ def resolve_prod_scorers(config: dict[str, Any]) -> list[tuple[str, Any]]:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _get_experiment_name(config: dict[str, Any]) -> str:
-    """Return the experiment name (single experiment for all traces and evaluation)."""
-    return config.get("experiment_name") or config.get("production_experiment") or "agent_evaluation"
 
 
 def _init_mlflow_experiment(
@@ -155,7 +151,7 @@ def action_start(
 
     from agent_foundry import env
 
-    experiment_name = _get_experiment_name(config)
+    experiment_name = get_experiment_name(config, variables)
     _init_mlflow_experiment(experiment_name, variables)
 
     warehouse_id = config.get("warehouse_id") or env.read_optional(env.MLFLOW_TRACING_SQL_WAREHOUSE_ID) or ""
@@ -171,7 +167,7 @@ def action_start(
     prod_config = config.get("production_monitoring", {})
     sample_rate = prod_config.get("sample_rate", 0.5)
 
-    scorers = resolve_prod_scorers(config)
+    scorers = resolve_prod_scorers(config, instance_dir)
     if not scorers:
         print("No production scorers configured.")
         return 1
@@ -199,7 +195,7 @@ def action_stop(
     """Stop all registered production scorers."""
     from mlflow.genai.scorers import list_scorers
 
-    experiment_name = _get_experiment_name(config)
+    experiment_name = get_experiment_name(config, variables)
     _init_mlflow_experiment(experiment_name, variables)
 
     scorers = list_scorers()
@@ -227,7 +223,7 @@ def action_status(
     """List all registered scorers and their status."""
     from mlflow.genai.scorers import list_scorers
 
-    experiment_name = _get_experiment_name(config)
+    experiment_name = get_experiment_name(config, variables)
     _init_mlflow_experiment(experiment_name, variables)
 
     scorers = list_scorers()
@@ -254,7 +250,7 @@ def action_delete(
     """Delete all registered scorers from the experiment."""
     from mlflow.genai.scorers import delete_scorer, list_scorers
 
-    experiment_name = _get_experiment_name(config)
+    experiment_name = get_experiment_name(config, variables)
     _init_mlflow_experiment(experiment_name, variables)
 
     scorers = list_scorers()

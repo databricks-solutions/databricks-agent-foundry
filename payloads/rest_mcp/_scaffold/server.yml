@@ -3,6 +3,25 @@
 # Agent attachment for the API named ``example_api`` in the paired
 # rest_mcp payload manifest. Keep the directory/API name and variable suffix
 # aligned if you rename it.
+#
+# To consume the API through its Unity Gateway MCP Service instead (AI Gateway
+# policies, rate limits and audit apply), enable ``mcp_service`` for the API in
+# the rest_mcp payload, deploy it, delete this file and pin the service in the
+# agent's payload.yml:
+#
+#   spec:
+#     runtime:
+#       tools:
+#         mcp:
+#           gateway:
+#             pinned:
+#               - fqn: "${var.rest_mcp_service__example_api}"
+#                 identity: sp
+#                 tools:
+#                   allow: [get_item]
+#
+# The variable only exists once the service is deployed; until then the agent
+# deploy fails rather than run without the tools.
 type: external
 connection_name: "${var.rest_mcp_connection__example_api}"
 description: "Example REST API exposed through the rest_mcp proxy."

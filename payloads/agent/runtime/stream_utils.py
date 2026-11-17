@@ -124,8 +124,9 @@ def _tool_output_events(
     arguments: Any,
     pending_calls: dict[str, tuple[str, Any]],
     emitted_call_ids: set[str],
+    ui_parts: dict[str, str],
 ) -> list[ResponsesAgentStreamEvent]:
-    """One ``function_call_output`` item, plus any extra renderer message."""
+    """One ``function_call_output`` item, plus any extra renderer message and the call's UI part."""
     if call_id and call_id in emitted_call_ids:
         return []
     if call_id:
@@ -143,6 +144,9 @@ def _tool_output_events(
         extra = render_extra_text_part(name, arguments, output)
         if extra:
             events.append(build_message_event(extra))
+    ui_part = ui_parts.pop(call_id, None) if call_id else None
+    if ui_part:
+        events.append(build_message_event(ui_part))
     return events
 
 
@@ -150,6 +154,7 @@ def _early_output_events(
     early: EarlyToolOutput,
     pending_calls: dict[str, tuple[str, Any]],
     emitted_call_ids: set[str],
+    ui_parts: dict[str, str],
 ) -> list[ResponsesAgentStreamEvent]:
     return _tool_output_events(
         call_id=early.call_id,
@@ -159,6 +164,7 @@ def _early_output_events(
         arguments=early.arguments,
         pending_calls=pending_calls,
         emitted_call_ids=emitted_call_ids,
+        ui_parts=ui_parts,
     )
 
 
@@ -245,6 +251,24 @@ def build_message_item(text: str) -> dict[str, Any]:
     }
 
 
+def with_ui_parts(items: list[Any], ui_parts: dict[str, str]) -> list[Any]:
+    """*items* with each call's UI part taken out of *ui_parts* and placed after its tool output.
+
+    The ``@invoke`` counterpart of what :func:`process_agent_stream_events`
+    does per event.
+    """
+    out: list[Any] = []
+    for item in items:
+        out.append(item)
+        if not isinstance(item, dict) or item.get("type") != "function_call_output":
+            continue
+        call_id = item.get("call_id")
+        ui_part = ui_parts.pop(call_id, None) if isinstance(call_id, str) else None
+        if ui_part:
+            out.append(build_message_item(ui_part))
+    return out
+
+
 def build_message_event(
     text: str,
 ) -> ResponsesAgentStreamEvent:
@@ -296,6 +320,7 @@ async def process_agent_stream_events(
     *,
     emit_reasoning: bool = True,
     early_tool_outputs: asyncio.Queue[EarlyToolOutput] | None = None,
+    ui_parts: dict[str, str] | None = None,
 ) -> AsyncGenerator[ResponsesAgentStreamEvent, None]:
     """Yield ``ResponsesAgentStreamEvent`` items from a Runner stream.
 
@@ -333,7 +358,11 @@ async def process_agent_stream_events(
     With *emit_reasoning* off, every reasoning event -- and any reasoning
     item inside ``response.completed`` -- is dropped, for callers that
     only want the answer.
+
+    *ui_parts* is the request's :attr:`RequestState.ui_parts`: each entry is
+    taken out and sent as a ``message`` right after its tool's output.
     """
+    parts = ui_parts if ui_parts is not None else {}
     curr_item_id = str(uuid4())
     item_ids: dict[tuple[int, str], str] = {}
     # Fallback when an index moves under an item: the SDK re-numbers the
@@ -355,7 +384,7 @@ async def process_agent_stream_events(
             if event.call_id not in streamed_call_ids:
                 held_outputs[event.call_id] = event
                 continue
-            for stream_event in _early_output_events(event, pending_calls, emitted_call_ids):
+            for stream_event in _early_output_events(event, pending_calls, emitted_call_ids, parts):
                 yield stream_event
             continue
 
@@ -406,7 +435,7 @@ async def process_agent_stream_events(
                 streamed_call_ids.add(call_id)
                 held = held_outputs.pop(call_id, None)
                 if held is not None:
-                    for stream_event in _early_output_events(held, pending_calls, emitted_call_ids):
+                    for stream_event in _early_output_events(held, pending_calls, emitted_call_ids, parts):
                         yield stream_event
 
         elif event.type == "run_item_stream_event":
@@ -421,7 +450,7 @@ async def process_agent_stream_events(
                 call_id = raw_call_id if isinstance(raw_call_id, str) else None
                 held = held_outputs.pop(call_id, None) if call_id else None
                 if held is not None:
-                    for stream_event in _early_output_events(held, pending_calls, emitted_call_ids):
+                    for stream_event in _early_output_events(held, pending_calls, emitted_call_ids, parts):
                         yield stream_event
                     continue
                 for stream_event in _tool_output_events(
@@ -432,5 +461,6 @@ async def process_agent_stream_events(
                     arguments=None,
                     pending_calls=pending_calls,
                     emitted_call_ids=emitted_call_ids,
+                    ui_parts=parts,
                 ):
                     yield stream_event

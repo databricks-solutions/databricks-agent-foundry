@@ -10,9 +10,16 @@ agent — for example loading documents into a Vector Search source table.
 jobs/
   docs_ingest/
     job.yml
+    sql/
+      ingest_chunks.sql
     notebooks/
-      ingest_docs.py
+      sync_index.py
 ```
+
+This is the portfolio example's document-ingestion job: a `sql_task` that
+parses and chunks uploaded files with `ai_parse_document` and
+`ai_prep_search`, followed by a notebook task that syncs the Vector Search
+index. Copy it from `examples/portfolio_assistant/jobs/docs_ingest/`.
 
 Each direct child of `jobs/` is an independent sub-instance. The presence of
 `job.yml` opts it into `agent-foundry deploy`.

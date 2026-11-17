@@ -125,7 +125,7 @@ def _create_service(
         body={
             "comment": comment,
             "config": {
-                "connection": {"name": f"connections/{connection_name}"},
+                "source_connection": {"name": f"connections/{connection_name}"},
                 "include_tool_selectors": include_tool_selectors,
             },
         },

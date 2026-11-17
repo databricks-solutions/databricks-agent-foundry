@@ -341,6 +341,7 @@ class GatewaySkillLoader:
             valid = sorted(self._loadables)
             return f"Error: skill_id {skill_id!r} is not in the skill index. Valid skill_ids: {valid!r}."
         with mlflow.start_span(name=LOAD_SKILL_TOOL_NAME, span_type="TOOL") as span:
+            span.set_inputs({"skill_id": skill_id})
             span.set_attribute(SKILL_LOADED_ATTRIBUTE, loadable.entry.candidate.fqn)
             span.set_attribute("gateway.skill.etag", loadable.entry.etag)
             return await self._load(loadable, span)

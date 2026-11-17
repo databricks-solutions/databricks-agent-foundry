@@ -1,4 +1,27 @@
 {
+  "$defs": {
+    "ScorerSpec": {
+      "additionalProperties": false,
+      "description": "A scorer entry with constructor arguments, e.g. a ``Guidelines`` judge.",
+      "properties": {
+        "args": {
+          "additionalProperties": true,
+          "default": {},
+          "title": "Args",
+          "type": "object"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ScorerSpec",
+      "type": "object"
+    }
+  },
   "description": "Evaluation and monitoring from ``evaluation/eval_config.yml``.",
   "properties": {
     "max_traces": {
@@ -15,7 +38,14 @@
     "scorers": {
       "additionalProperties": {
         "items": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ScorerSpec"
+            }
+          ]
         },
         "type": "array"
       },

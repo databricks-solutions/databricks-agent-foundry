@@ -72,7 +72,7 @@ from agent_foundry.variables import (
     add_project_root_arg,
     substitute_obj,
 )
-from bricks.evaluation.config import load_eval_config
+from bricks.evaluation.config import get_experiment_name, load_eval_config
 
 # ---------------------------------------------------------------------------
 # Dataset loading
@@ -196,6 +196,7 @@ def resolve_scorers(
     config: dict[str, Any],
     has_expectations: bool = False,
     traces_mode: bool = False,
+    instance_dir: Path | None = None,
 ) -> list[Any]:
     """Build the scorer list from config, mixing built-in judges and custom scorers.
 
@@ -203,17 +204,13 @@ def resolve_scorers(
         has_expectations: Include ``with_ground_truth`` scorers (Correctness, etc.).
         traces_mode: Include ``traces_only`` scorers (RetrievalGroundedness, etc.)
             that need access to trace internals (e.g. RETRIEVER spans).
+        instance_dir: Instance whose ``evaluation/scorers/*.py`` scorers can be
+            referenced under ``scorers.custom``.
     """
-    from bricks.evaluation.scorers.builtin import get_builtin_judges
-    from bricks.evaluation.scorers.genie_accuracy import genie_sql_correctness
-    from bricks.evaluation.scorers.response_quality import response_quality
-    from bricks.evaluation.scorers.routing import tool_routing_accuracy
+    from bricks.evaluation.scorers.builtin import get_builtin_judges, parse_scorer_entry
+    from bricks.evaluation.scorers.registry import build_custom_registry
 
-    custom_registry = {
-        "tool_routing_accuracy": tool_routing_accuracy,
-        "genie_sql_correctness": genie_sql_correctness,
-        "response_quality": response_quality,
-    }
+    custom_registry = build_custom_registry(instance_dir)
 
     scorer_config = config.get("scorers", {})
     scorers: list[Any] = []
@@ -232,8 +229,10 @@ def resolve_scorers(
         if trace_names:
             scorers.extend(get_builtin_judges(trace_names))
 
-    custom_names = scorer_config.get("custom", [])
-    for name in custom_names:
+    for entry in scorer_config.get("custom", []):
+        name, args = parse_scorer_entry(entry)
+        if args:
+            raise ValueError(f"Custom scorer '{name}' does not take args")
         if name in custom_registry:
             scorers.append(custom_registry[name])
         else:
@@ -276,7 +275,7 @@ def run_direct_evaluation(
     """
     import mlflow
 
-    experiment_name = _get_experiment_name(config, variables)
+    experiment_name = get_experiment_name(config, variables)
     _init_mlflow_experiment(experiment_name, variables)
     print(f"MLflow experiment: {experiment_name}")
 
@@ -316,6 +315,7 @@ def run_direct_evaluation(
         config,
         has_expectations=has_expectations,
         traces_mode=True,
+        instance_dir=instance_dir,
     )
     print(f"  Scorers: {len(scorers)} ({', '.join(_scorer_name(s) for s in scorers)})")
 
@@ -348,23 +348,6 @@ def run_direct_evaluation(
         )
     _print_results(results)
     return 0
-
-
-def _get_experiment_name(
-    config: dict[str, Any],
-    variables: dict[str, str] | None = None,
-) -> str:
-    """Return the experiment name (single experiment for all traces and evaluation).
-
-    Falls back to ``variables["tracing_experiment"]`` (computed by InstanceConfig)
-    when the eval config doesn't specify an explicit experiment name.
-    """
-    name: str | None = config.get("experiment_name") or config.get("production_experiment")
-    if name:
-        return name
-    if variables and variables.get("tracing_experiment"):
-        return variables["tracing_experiment"]
-    return "agent_evaluation"
 
 
 def _init_mlflow_experiment(
@@ -442,7 +425,7 @@ def run_trace_evaluation(
     """
     import mlflow
 
-    experiment_name = _get_experiment_name(config, variables)
+    experiment_name = get_experiment_name(config, variables)
     _init_mlflow_experiment(experiment_name, variables)
     print(f"MLflow experiment: {experiment_name}")
 
@@ -457,7 +440,7 @@ def run_trace_evaluation(
         print("No traces found. Ensure your agent is logging traces to this experiment.")
         return 1
 
-    scorers = resolve_scorers(config, has_expectations=False, traces_mode=True)
+    scorers = resolve_scorers(config, has_expectations=False, traces_mode=True, instance_dir=instance_dir)
     print(f"  Scorers: {len(scorers)} ({', '.join(_scorer_name(s) for s in scorers)})")
 
     if dry_run:

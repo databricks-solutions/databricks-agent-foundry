@@ -152,10 +152,14 @@ class _FakeApp:
 class _FakeApps:
     def __init__(self, url: str, sp_client_id: str, sp_id: str) -> None:
         self._app = _FakeApp(url, sp_client_id, sp_id)
+        self.permission_updates: list[tuple[str, list[Any]]] = []
 
     def get(self, name: str) -> _FakeApp:
         del name
         return self._app
+
+    def update_permissions(self, app_name: str, *, access_control_list: list[Any]) -> None:
+        self.permission_updates.append((app_name, access_control_list))
 
 
 class _FakeConfig:

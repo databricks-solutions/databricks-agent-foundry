@@ -124,7 +124,7 @@ Schemas follow the pattern `{schema_prefix}_{purpose}`, where `schema_prefix` is
 | Schema | Purpose | Example contents |
 |---|---|---|
 | `{prefix}_views` | All Genie Space views | `catalog_explorer_catalog_objects`, `sales_revenue` |
-| `{prefix}_indexes` | Source tables + VS indexes | `docs`, `docs_index` |
+| `{prefix}_indexes` | Source tables + VS indexes | `docs_chunks`, `docs_chunks_index` |
 | `{prefix}_agent` | MLflow traces, eval datasets | `golden_set`, `trace_summary` |
 
 Views within the shared `_views` schema are prefixed with their data domain name to stay unique across multiple Genie Spaces. Each `domain.yml` declares its target schema using `${var.schema_prefix}`:

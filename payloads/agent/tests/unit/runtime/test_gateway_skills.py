@@ -363,6 +363,16 @@ class TestGatewaySkillLoader:
         assert "Do the thing." in response
 
     @pytest.mark.asyncio
+    async def test_records_the_skill_id_as_span_input(self) -> None:
+        fake = _FakeSkills({"t.s.a": ("e1", "Do the thing.")})
+
+        with patch("mlflow.start_span") as start_span:
+            await _loader(fake, "t.s.a")(None, json.dumps({"skill_id": "t.s.a"}))
+
+        span = start_span.return_value.__enter__.return_value
+        span.set_inputs.assert_called_once_with({"skill_id": "t.s.a"})
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("args", [json.dumps({"skill_id": "t.s.other"}), "{not json", json.dumps(["t.s.a"]), ""])
     async def test_refuses_anything_not_indexed(self, args: str) -> None:
         fake = _FakeSkills({"t.s.a": ("e1", "body"), "t.s.other": ("e1", "secret")})

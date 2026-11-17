@@ -16,6 +16,15 @@ class TestAgentAppConfig:
         assert c.app_resources == []
         assert c.sp_grants == []
         assert c.user_authorization == []
+        assert c.instances is None
+
+    def test_accepts_instance_count_above_default_quota(self) -> None:
+        assert AgentAppConfig(instances=8).instances == 8
+
+    @pytest.mark.parametrize("bad", [0, -1])
+    def test_rejects_instance_count_below_one(self, bad: int) -> None:
+        with pytest.raises(ValidationError, match="instances"):
+            AgentAppConfig.model_validate({"instances": bad})
 
     def test_accepts_large(self) -> None:
         c = AgentAppConfig(compute_size="large")

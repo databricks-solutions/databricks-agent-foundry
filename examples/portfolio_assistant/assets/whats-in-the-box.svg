@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1140 648" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
+  <rect x="0" y="0" width="1140" height="648" fill="#ffffff"/>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#57606a"/>
+    </marker>
+  </defs>
+
+  <!-- ===== Deploy order ===== -->
+  <text x="570.0" y="30" text-anchor="middle" font-size="11.5" fill="#1f2328">agent-foundry deploy runs the bricks in this order and publishes each brick's outputs as ${var.*} for the next</text>
+  <path d="M20,46 H1120" fill="none" stroke="#57606a" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- ===== Phases ===== -->
+  <rect x="20" y="76" width="260" height="472" rx="8" fill="#fff8f0" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="34" y="100" font-size="13" font-weight="600" fill="#1f2328">1 &#183; Data foundation</text>
+  <text x="34" y="116" font-size="10.5" fill="#57606a">deploy order 10&#8211;30</text>
+  <rect x="30" y="128" width="240" height="92" rx="6" fill="#ffffff" stroke="#bc4c00" stroke-width="1.2"/>
+  <text x="42" y="151" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">warehouse</text>
+  <rect x="224" y="138" width="34" height="17" rx="8.5" fill="#bc4c00"/>
+  <text x="241.0" y="150" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">10</text>
+  <text x="42" y="173" font-size="10.5" fill="#1f2328">Dedicated SQL warehouse, or bind an</text>
+  <text x="42" y="188" font-size="10.5" fill="#1f2328">existing one</text>
+  <text x="42" y="208" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">warehouse/</text>
+  <rect x="30" y="232" width="240" height="92" rx="6" fill="#ffffff" stroke="#bc4c00" stroke-width="1.2"/>
+  <text x="42" y="255" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">data</text>
+  <rect x="224" y="242" width="34" height="17" rx="8.5" fill="#bc4c00"/>
+  <text x="241.0" y="254" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">20</text>
+  <text x="42" y="277" font-size="10.5" fill="#1f2328">Curated views, docs volume and table,</text>
+  <text x="42" y="292" font-size="10.5" fill="#1f2328">landscape tables for the data universe</text>
+  <text x="42" y="312" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">data_domains/</text>
+  <rect x="30" y="336" width="240" height="92" rx="6" fill="#ffffff" stroke="#bc4c00" stroke-width="1.2"/>
+  <text x="42" y="359" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">sql_function</text>
+  <rect x="224" y="346" width="34" height="17" rx="8.5" fill="#bc4c00"/>
+  <text x="241.0" y="358" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">30</text>
+  <text x="42" y="381" font-size="10.5" fill="#1f2328">Unity Catalog function tools and</text>
+  <text x="42" y="396" font-size="10.5" fill="#1f2328">get_data_landscape()</text>
+  <text x="42" y="416" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">sql_functions/</text>
+
+  <rect x="300" y="76" width="260" height="472" rx="8" fill="#f6f0ff" stroke="#8250df" stroke-width="1.5"/>
+  <text x="314" y="100" font-size="13" font-weight="600" fill="#1f2328">2 &#183; Knowledge and tracing</text>
+  <text x="314" y="116" font-size="10.5" fill="#57606a">deploy order 40&#8211;70</text>
+  <rect x="310" y="128" width="240" height="92" rx="6" fill="#ffffff" stroke="#8250df" stroke-width="1.2"/>
+  <text x="322" y="151" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">tracing</text>
+  <rect x="504" y="138" width="34" height="17" rx="8.5" fill="#8250df"/>
+  <text x="521.0" y="150" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">40</text>
+  <text x="322" y="173" font-size="10.5" fill="#1f2328">UC OTel tables for spans, telemetry and</text>
+  <text x="322" y="188" font-size="10.5" fill="#1f2328">feedback, plus the MLflow experiment</text>
+  <text x="322" y="208" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">via payload.requires</text>
+  <rect x="310" y="232" width="240" height="92" rx="6" fill="#ffffff" stroke="#8250df" stroke-width="1.2"/>
+  <text x="322" y="255" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">genie</text>
+  <rect x="504" y="242" width="34" height="17" rx="8.5" fill="#8250df"/>
+  <text x="521.0" y="254" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">50</text>
+  <text x="322" y="277" font-size="10.5" fill="#1f2328">Genie space with instructions, SQL</text>
+  <text x="322" y="292" font-size="10.5" fill="#1f2328">examples, join specs and benchmarks</text>
+  <text x="322" y="312" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">genie_spaces/</text>
+  <rect x="310" y="336" width="240" height="92" rx="6" fill="#ffffff" stroke="#8250df" stroke-width="1.2"/>
+  <text x="322" y="359" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">vector_search</text>
+  <rect x="504" y="346" width="34" height="17" rx="8.5" fill="#8250df"/>
+  <text x="521.0" y="358" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">60</text>
+  <text x="322" y="381" font-size="10.5" fill="#1f2328">Delta Sync index over the docs table,</text>
+  <text x="322" y="396" font-size="10.5" fill="#1f2328">with citations to the source file</text>
+  <text x="322" y="416" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">vector_indexes/</text>
+  <rect x="310" y="440" width="240" height="92" rx="6" fill="#ffffff" stroke="#8250df" stroke-width="1.2"/>
+  <text x="322" y="463" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">job</text>
+  <rect x="504" y="450" width="34" height="17" rx="8.5" fill="#8250df"/>
+  <text x="521.0" y="462" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">70</text>
+  <text x="322" y="485" font-size="10.5" fill="#1f2328">Docs ingestion on file arrival and</text>
+  <text x="322" y="500" font-size="10.5" fill="#1f2328">scheduled data-universe profiling</text>
+  <text x="322" y="520" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">jobs/</text>
+
+  <rect x="580" y="76" width="260" height="472" rx="8" fill="#eef8f0" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="594" y="100" font-size="13" font-weight="600" fill="#1f2328">3 &#183; The agent</text>
+  <text x="594" y="116" font-size="10.5" fill="#57606a">deploy order 75&#8211;90</text>
+  <rect x="590" y="128" width="240" height="92" rx="6" fill="#ffffff" stroke="#1a7f37" stroke-width="1.2"/>
+  <text x="602" y="151" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">mcp</text>
+  <rect x="784" y="138" width="34" height="17" rx="8.5" fill="#1a7f37"/>
+  <text x="801.0" y="150" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">75</text>
+  <text x="602" y="173" font-size="10.5" fill="#1f2328">Four MCP servers (Genie, Vector Search,</text>
+  <text x="602" y="188" font-size="10.5" fill="#1f2328">UC functions, SQL), fail-closed allowlist</text>
+  <text x="602" y="208" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">payloads/agent/mcp_servers/</text>
+  <rect x="590" y="232" width="240" height="92" rx="6" fill="#ffffff" stroke="#1a7f37" stroke-width="1.2"/>
+  <text x="602" y="255" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">agent payload</text>
+  <rect x="766" y="242" width="52" height="17" rx="8.5" fill="#1a7f37"/>
+  <text x="792.0" y="254" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">payload</text>
+  <text x="602" y="277" font-size="10.5" fill="#1f2328">Agent loop, four skills, chat UI,</text>
+  <text x="602" y="292" font-size="10.5" fill="#1f2328">A2A and MCP endpoints</text>
+  <text x="602" y="312" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">payloads/agent/</text>
+  <rect x="590" y="336" width="240" height="92" rx="6" fill="#ffffff" stroke="#1a7f37" stroke-width="1.2"/>
+  <text x="602" y="359" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">app</text>
+  <rect x="784" y="346" width="34" height="17" rx="8.5" fill="#1a7f37"/>
+  <text x="801.0" y="358" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">90</text>
+  <text x="602" y="381" font-size="10.5" fill="#1f2328">Databricks App host, Lakebase chat</text>
+  <text x="602" y="396" font-size="10.5" fill="#1f2328">history, on-behalf-of identity</text>
+  <text x="602" y="416" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">app/</text>
+
+  <rect x="860" y="76" width="260" height="472" rx="8" fill="#f6f8fa" stroke="#57606a" stroke-width="1.5"/>
+  <text x="874" y="100" font-size="13" font-weight="600" fill="#1f2328">4 &#183; Operate and verify</text>
+  <text x="874" y="116" font-size="10.5" fill="#57606a">order 100, then the CLI</text>
+  <rect x="870" y="128" width="240" height="92" rx="6" fill="#ffffff" stroke="#57606a" stroke-width="1.2"/>
+  <text x="882" y="151" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">observability</text>
+  <rect x="1064" y="138" width="34" height="17" rx="8.5" fill="#57606a"/>
+  <text x="1081.0" y="150" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">100</text>
+  <text x="882" y="173" font-size="10.5" fill="#1f2328">Lakeview dashboard: volume, latency,</text>
+  <text x="882" y="188" font-size="10.5" fill="#1f2328">quality, feedback, token and cache cost</text>
+  <text x="882" y="208" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">via payload.requires</text>
+  <rect x="870" y="232" width="240" height="92" rx="6" fill="#ffffff" stroke="#57606a" stroke-width="1.2"/>
+  <text x="882" y="255" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">evaluation</text>
+  <rect x="1064" y="242" width="34" height="17" rx="8.5" fill="#57606a"/>
+  <text x="1081.0" y="254" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">CLI</text>
+  <text x="882" y="277" font-size="10.5" fill="#1f2328">Golden set, custom scorers, production</text>
+  <text x="882" y="292" font-size="10.5" fill="#1f2328">monitors on 50% of live traces</text>
+  <text x="882" y="312" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">evaluation/ &#183; eval, monitors</text>
+  <rect x="870" y="336" width="240" height="92" rx="6" fill="#ffffff" stroke="#57606a" stroke-width="1.2"/>
+  <text x="882" y="359" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="700" fill="#1f2328">tests + smoke</text>
+  <rect x="1064" y="346" width="34" height="17" rx="8.5" fill="#57606a"/>
+  <text x="1081.0" y="358" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff">CLI</text>
+  <text x="882" y="381" font-size="10.5" fill="#1f2328">Unit tests and post-deploy smoke</text>
+  <text x="882" y="396" font-size="10.5" fill="#1f2328">questions over /invocations, MCP, A2A</text>
+  <text x="882" y="416" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10" fill="#57606a">tests/ &#183; smoke.yml</text>
+
+  <!-- ===== Delivery ===== -->
+  <rect x="20" y="568" width="1100" height="60" rx="8" fill="#f6f8fa" stroke="#57606a" stroke-width="1.5"/>
+  <text x="34" y="594" font-size="13" font-weight="600" fill="#1f2328">Same instance, every environment</text>
+  <text x="34" y="611" font-size="10.5" fill="#57606a">CI promotes it with approval gates</text>
+  <rect x="320" y="581" width="140" height="34" rx="17" fill="#ffffff" stroke="#57606a" stroke-width="1.2"/>
+  <text x="390.0" y="596" text-anchor="middle" font-size="11.5" font-weight="600" fill="#1f2328">dev</text>
+  <text x="390.0" y="609" text-anchor="middle" font-size="10" fill="#57606a">laptop</text>
+  <rect x="520" y="581" width="300" height="34" rx="17" fill="#ffffff" stroke="#57606a" stroke-width="1.2"/>
+  <text x="670.0" y="596" text-anchor="middle" font-size="11.5" font-weight="600" fill="#1f2328">staging</text>
+  <text x="670.0" y="609" text-anchor="middle" font-size="10" fill="#57606a">approved deploy + acceptance tests</text>
+  <rect x="880" y="581" width="200" height="34" rx="17" fill="#ffffff" stroke="#57606a" stroke-width="1.2"/>
+  <text x="980.0" y="596" text-anchor="middle" font-size="11.5" font-weight="600" fill="#1f2328">prod</text>
+  <text x="980.0" y="609" text-anchor="middle" font-size="10" fill="#57606a">approved deploy</text>
+  <path d="M460,598 H518" fill="none" stroke="#57606a" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <path d="M820,598 H878" fill="none" stroke="#57606a" stroke-width="1.4" marker-end="url(#arrow)"/>
+</svg>

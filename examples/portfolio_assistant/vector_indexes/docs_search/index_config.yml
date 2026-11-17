@@ -2,8 +2,9 @@
 #
 # Vector Search Index: docs_search
 # ==================================
-# Delta Sync index on the synthetic docs corpus.
-# Databricks manages embeddings via Foundation Model API.
+# Delta Sync index on the docs_chunks table that jobs/docs_ingest fills.
+# Databricks manages embeddings via Foundation Model API, computed from
+# chunk_to_embed (chunk text plus document and page context).
 
 # The agent reaches this index through mcp_servers/docs_search/.
 
@@ -12,19 +13,20 @@ endpoint:
   endpoint_type: "STANDARD"
 
 index:
-  name: "${var.catalog}.${var.schema_prefix}_indexes.docs_index"
-  primary_key: "id"
+  name: "${var.catalog}.${var.schema_prefix}_indexes.docs_chunks_index"
+  primary_key: "chunk_id"
   index_type: "DELTA_SYNC"
 
   delta_sync:
-    source_table: "${var.catalog}.${var.schema_prefix}_indexes.docs"
+    source_table: "${var.catalog}.${var.schema_prefix}_indexes.docs_chunks"
     pipeline_type: "TRIGGERED"
     columns_to_sync:
-      - "id"
+      - "chunk_id"
       - "content"
       - "source"
       - "category"
       - "doc_uri"
+      - "page_number"
     embedding_source_columns:
-      - name: "content"
+      - name: "chunk_to_embed"
         embedding_model_endpoint_name: "databricks-gte-large-en"

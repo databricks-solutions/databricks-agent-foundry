@@ -425,15 +425,10 @@ extras its App installs; see the payload's README.
 
 ### Package index / proxy
 
-This repo's CI/Dependabot may use an internal PyPI proxy. **Forking?** Point
+This repo's CI may use an internal PyPI proxy. **Forking?** Point
 resolution at an index you can reach. The full checklist (the package index OIDC action,
 `uv.lock` registries, hashed installs) is in
 [Fork for platform teams — Package index](docs/how-to/fork-for-platform-teams.md#2-package-index--your-pypi-mirror).
-
-- **Your mirror:** update `registries.python-proxy` in `.github/dependabot.yml`
-  and local uv/pip config.
-- **Public `pypi.org`:** remove the `registries` block and the `registries:`
-  reference under the `pip` ecosystem in `.github/dependabot.yml`.
 
 
 ## Design principles

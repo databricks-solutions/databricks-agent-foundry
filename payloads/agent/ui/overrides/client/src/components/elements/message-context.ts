@@ -53,6 +53,15 @@ export function parseFenceHeader(
   };
 }
 
+function clickDownloadLink(filename: string, href: string): void {
+  const link = document.createElement('a');
+  link.href = href;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 /**
  * Trigger a browser download for the given text content.
  * Used by ``sql-download``, ``table-download`` (CSV), and
@@ -65,13 +74,13 @@ export function downloadTextFile(
 ): void {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  clickDownloadLink(filename, url);
   URL.revokeObjectURL(url);
+}
+
+/** Trigger a browser download for a ``data:`` URL (chart PNG export). */
+export function downloadDataUrl(filename: string, dataUrl: string): void {
+  clickDownloadLink(filename, dataUrl);
 }
 
 /**

@@ -285,6 +285,9 @@ payload:
         enabled: true
       charts:
         enabled: true
+      # Markdown reports the user can copy or download as .md.
+      reports:
+        enabled: false
       # How tool-call panels render.  A behavioural mode, not a mount
       # toggle: the panels are always there, this only decides whether
       # each one starts expanded.  Collapsed keeps the answer visible

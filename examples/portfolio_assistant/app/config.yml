@@ -23,7 +23,6 @@ compute_size: "large"
 # OBO scopes -- add or remove when you add/remove tools.
 user_authorization:
   - sql
-  - dashboards.genie
   - serving.serving-endpoints
   - vectorsearch.vector-search-indexes
   - catalog.catalogs:read
@@ -31,5 +30,4 @@ user_authorization:
   - catalog.tables:read
   - mcp.functions
   - mcp.vectorsearch
-  - mcp.genie
   - mcp.external

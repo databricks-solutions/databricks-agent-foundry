@@ -21,6 +21,86 @@ Authoring surfaces: `payload.yml` (`spec.runtime` / `spec.ui` /
 
 ---
 
+## What it looks like
+
+Screenshots from the chat UI. Which features are on by default, and the
+`payload.yml` switch for each, is in the
+[capabilities guide](CAPABILITIES.md#at-a-glance).
+
+### Charts from your data
+
+Ask a question about your data and the agent answers with an interactive
+chart: line, area, bar, scatter and bubble, pie, or sankey. The toolbar
+switches the chart type and downloads the data as CSV or the chart as PNG.
+[Details](CAPABILITIES.md#charts)
+
+<table>
+  <tr>
+    <td><img src="assets/showcase/echarts-lines-support.png" alt="Line chart of daily trips"></td>
+    <td><img src="assets/showcase/echarts-histogram.png" alt="Bar chart of trips per hour of day"></td>
+  </tr>
+  <tr>
+    <td><img src="assets/showcase/echarts-bubble-support.png" alt="Bubble chart of average fare against average distance"></td>
+    <td><img src="assets/showcase/6-Pie-customers-by-market-segment.png" alt="Pie chart of customers by market segment"></td>
+  </tr>
+</table>
+
+Time series take reference lines, bands and a zoom slider.
+
+![Area chart with reference lines, a band and a zoom slider](assets/showcase/echarts-annotated-time-axis.png)
+
+### Diagrams and illustrations
+
+Mermaid and SVG code blocks render as diagrams and images, with **Copy**
+and **SVG** download. Both are always on.
+[Details](CAPABILITIES.md#charts)
+
+![Mermaid sequence diagram](assets/showcase/mermaid-support.png)
+
+![SVG architecture illustration drawn by the agent](assets/showcase/svg-support.png)
+
+### Reports (opt-in)
+
+For results worth keeping, the agent writes a report: Markdown with charts
+and diagrams embedded, downloadable as Markdown or as one standalone HTML
+page that prints to a clean PDF. [Details](CAPABILITIES.md#reports)
+
+![Report card with embedded charts and Markdown and HTML download buttons](assets/showcase/reports.png)
+
+### Files, images and speech
+
+Users attach spreadsheets, documents and images (paste, drag and drop, or
+the paperclip) and can dictate with the microphone (opt-in, needs a Whisper
+endpoint). The ring next to the send button is the context meter: it fills
+as the chat grows, and past the trigger the agent summarizes earlier turns
+instead of cutting the conversation off. Images reach the model as image
+content, so the endpoint must accept them.
+[Files and images](CAPABILITIES.md#file-and-image-input) ·
+[Speech](CAPABILITIES.md#speech-input) ·
+[Compaction](CAPABILITIES.md#compaction-and-the-context-meter)
+
+![Chat input with attach, context meter, microphone and send](assets/showcase/attach-files-speech-to-text-chat-compaction.png)
+
+![A user attaches an image and the agent describes it](assets/showcase/in-chat-image-support.png)
+
+### Skills of their own
+
+Each user keeps their own skills in the resources panel and picks which
+ones are active. The agent can save one on request, and never deletes one.
+[Details](CAPABILITIES.md#user-skills)
+
+![Resources panel with a user-scoped skill being edited](assets/showcase/user-scoped-skills.png)
+
+### Plans for long tasks (opt-in)
+
+For multi-step work the agent sets a goal and a few milestones, ticks them
+off as it goes, and sees the plan before every model call. Users follow it
+in a panel above the chat input. [Details](CAPABILITIES.md#plan)
+
+![Plan with four completed milestones](assets/showcase/planning.png)
+
+---
+
 ## Capabilities (what the agent can do)
 
 New to the opt-in capabilities? The [capabilities guide](CAPABILITIES.md)
@@ -43,6 +123,7 @@ to turn it on:
 | [Reasoning](CAPABILITIES.md#reasoning) | `runtime.reasoning.*` |
 | [File and image input](CAPABILITIES.md#file-and-image-input) | `ui.file_upload.enabled` / `.images` |
 | [Charts](CAPABILITIES.md#charts) | `ui.charts.enabled` |
+| [Reports](CAPABILITIES.md#reports) | `ui.reports.enabled` |
 | [Feedback](CAPABILITIES.md#feedback) | `ui.feedback.enabled` |
 | [Resources panel](CAPABILITIES.md#resources-panel) | `ui.resources_sidebar.enabled` |
 | [Speech input](CAPABILITIES.md#speech-input) | `ui.speech_input.enabled` + `endpoint` |
@@ -127,6 +208,8 @@ to turn it on:
 
 - Render **markdown** (tables, code, lists).
 - Emit **charts** (`echarts-chart` fences) when `spec.ui.charts` is on.
+- Render **Mermaid diagrams** (`mermaid` fences) and **SVG images** (`svg` fences).
+- Show downloadable **reports** (`markdown-report` fences) when `spec.ui.reports` is on.
 - Show **tool-call panels** (collapsed or expanded by default).
 - Accept **file uploads** (CSV/XLSX and related parsers, size cap) when
   enabled; parsed content is injected into the conversation.
@@ -321,7 +404,8 @@ Module reference: [runtime/README.md](runtime/README.md).
 |------|--------------------|
 | `model` | `{kind, name}`: a Model Serving endpoint (`serving_endpoint`, e.g. Claude, Llama) or a Unity Gateway `model_service` |
 | `system_prompt` | Top-level agent instructions (assembled with skills) |
-| `max_tool_calls_per_turn` / `max_iterations` | Hard caps on tool use and agent loop |
+| `max_iterations` | Enforced cap on LLM turns per request; hitting it ends the run with a notice |
+| `max_tool_calls_per_turn` | Advisory only: loaded into the runtime config but not enforced yet ([#802](the public issue tracker)) |
 | `inject_time_user` | Whether user + timestamp are injected each turn |
 | `tools.mcp_only` | MCP-only tools (default) vs legacy direct skill tools |
 | `tools.skills.loading` | `eager` or `lazy` |
@@ -356,6 +440,7 @@ Omit a field to inherit runtime defaults. Unknown keys fail validation
 | `speech_input.enabled` / `endpoint` / `max_seconds` / `language` | Microphone button that transcribes into the composer through a serving endpoint (see [Speech input](CAPABILITIES.md#speech-input)) |
 | `feedback.enabled` | Per-message thumbs, comment, and category tags (needs `MLFLOW_EXPERIMENT_ID`) |
 | `charts.enabled` | Chart fence rendering |
+| `reports.enabled` | Report card rendering with `.md` download, and the agent's `_report` tool (default off) |
 | `tool_output.expanded` | Tool panels start open or closed |
 | `chat_layout.width` | Max width of the chat column: `4xl` (default, 896px), `5xl`, `6xl` or `7xl` (1280px) |
 | `resources_sidebar.enabled` | Resources panel listing MCPs, skills and user picks |
@@ -397,6 +482,7 @@ What the App host provisions around the payload. An instance's
 |-----|--------------------|
 | `payloads` | Which payload the App host mounts (`agent`) |
 | `compute_size` | `medium` (default) or `large` |
+| `instances` | Optional fixed instance count for [horizontal scaling](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/horizontal-scaling) (≥ 1; default quota 5). Unset leaves scaling untouched; removing it does not revert to a standard App. Browser sessions stick to one instance; API clients (A2A, MCP) can send `X-Routing-Key` for the same |
 | `app_resources` | Resources granted to the App service principal: LLM endpoint, SQL warehouse, trace tables, MLflow experiment, Lakebase (dropped automatically when chat history is off) |
 | `sp_grants` | Unity Catalog grants applied after the App is created (catalog, agent schema) |
 | `user_authorization` | On-behalf-of scopes; add `mcp.*` scopes (`mcp.genie`, `mcp.vectorsearch`, `mcp.functions`, `mcp.external`) when you add MCP servers |

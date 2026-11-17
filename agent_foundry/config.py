@@ -180,10 +180,19 @@ class WarehouseConfig(BaseModel, frozen=True):
         return self
 
 
+class ScorerSpec(BaseModel):
+    """A scorer entry with constructor arguments, e.g. a ``Guidelines`` judge."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str
+    args: dict[str, Any] = {}
+
+
 class EvaluationConfig(BaseModel, frozen=True):
     """Evaluation and monitoring from ``evaluation/eval_config.yml``."""
 
-    scorers: dict[str, list[str]] = {}
+    scorers: dict[str, list[str | ScorerSpec]] = {}
     max_traces: int = 100
     production_monitoring: dict[str, Any] = {}
 
@@ -213,6 +222,8 @@ class InstanceConfig(BaseModel, frozen=True):
     vs_endpoint_name: str = ""
     app_name: str = ""
     chat_ui_app_name: str = ""
+    # Set by the loader from the payload adapter; not authored in foundry.toml.
+    app_resource_name_override: str = ""
 
     target: TargetConfig = TargetConfig()
     warehouse: WarehouseConfig = WarehouseConfig()
@@ -323,7 +334,7 @@ class InstanceConfig(BaseModel, frozen=True):
     @property
     def app_resource_name(self) -> str:
         """Databricks App resource name (no brackets)."""
-        return self._resource_name("app")
+        return self.app_resource_name_override or self._resource_name("app")
 
     @computed_field  # type: ignore[prop-decorator]
     @property

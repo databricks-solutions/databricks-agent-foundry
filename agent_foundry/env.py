@@ -525,16 +525,29 @@ COMPACTION_MANUAL_ACTION: Final = EnvVar(
 # Read only by the chat UI's Node config route
 # (payloads/agent/ui/overrides/server/src/routes/config.ts), which serves
 # them to the client as ``/api/config`` feature flags.  No Python
-# consumer, but registered here so the App boundary contract stays in one
-# place and reaches docs/reference/env-vars.md.
+# consumer except ENABLE_CHARTS and ENABLE_REPORTS (the agent's ``_chart``
+# and ``_report`` tools), but registered here so the App boundary contract
+# stays in one place and reaches docs/reference/env-vars.md.
 
 ENABLE_CHARTS: Final = EnvVar(
     name="ENABLE_CHARTS",
     required_at=("app",),
     description=(
-        "Render 'echarts-chart' fenced blocks as interactive charts in the chat UI. "
-        "Truthy values: 'true', '1', 'yes' (case-insensitive). Derived by the agent payload "
-        "adapter from the payloads/agent/payload.yml spec.ui.charts toggle."
+        "Render 'echarts-chart' fenced blocks as interactive charts in the chat UI, and offer the "
+        "agent the '_chart' tool, which charts a SQL query's result. Truthy values: 'true', '1', "
+        "'yes' (case-insensitive). Derived by the agent payload adapter from the "
+        "payloads/agent/payload.yml spec.ui.charts toggle."
+    ),
+    default="false",
+)
+
+ENABLE_REPORTS: Final = EnvVar(
+    name="ENABLE_REPORTS",
+    required_at=("app",),
+    description=(
+        "Render 'markdown-report' fenced blocks as downloadable Markdown reports in the chat UI, and "
+        "offer the agent the '_report' tool. Truthy values: 'true', '1', 'yes' (case-insensitive). "
+        "Derived by the agent payload adapter from the payloads/agent/payload.yml spec.ui.reports toggle."
     ),
     default="false",
 )
@@ -604,6 +617,17 @@ FILE_UPLOAD_MEM_LIMIT_MB: Final = EnvVar(
         "Optional address-space ceiling (megabytes) applied to each parse worker in the "
         "file-extraction service (POSIX only). Unset = rely on the container memory limit."
     ),
+)
+
+FILE_UPLOAD_MAX_CONCURRENCY: Final = EnvVar(
+    name="FILE_UPLOAD_MAX_CONCURRENCY",
+    required_at=(),
+    description=(
+        "Maximum number of uploads parsed simultaneously by the file-extraction service. "
+        "Caps concurrent parse workers so a single authenticated user flooding /extract "
+        "cannot exhaust the container (CPU/memory); excess requests get HTTP 429."
+    ),
+    default="4",
 )
 
 # --- Evaluation harness ----------------------------------------------------
@@ -801,12 +825,14 @@ REGISTRY: Final[tuple[EnvVar, ...]] = (
     SPEECH_MAX_SECONDS,
     SPEECH_LANGUAGE,
     ENABLE_CHARTS,
+    ENABLE_REPORTS,
     ENABLE_FEEDBACK,
     TOOL_OUTPUT_EXPANDED,
     CHAT_MAX_WIDTH,
     FILE_UPLOAD_PORT,
     FILE_UPLOAD_MAX_MB,
     FILE_UPLOAD_MEM_LIMIT_MB,
+    FILE_UPLOAD_MAX_CONCURRENCY,
     EVAL_HTTP_TIMEOUT_SECONDS,
     DATABRICKS_HOST,
     DATABRICKS_TOKEN,
@@ -958,6 +984,7 @@ __all__ = [
     "ENABLE_A2A",
     "ENABLE_AGENT_MEMORY",
     "ENABLE_CHARTS",
+    "ENABLE_REPORTS",
     "ENABLE_CHAT_PLAN",
     "ENABLE_COMPACTION",
     "ENABLE_FEEDBACK",
@@ -969,6 +996,7 @@ __all__ = [
     "ENABLE_USER_SKILLS",
     "EVAL_HTTP_TIMEOUT_SECONDS",
     "EnvVar",
+    "FILE_UPLOAD_MAX_CONCURRENCY",
     "FILE_UPLOAD_MAX_MB",
     "FILE_UPLOAD_MEM_LIMIT_MB",
     "FILE_UPLOAD_PORT",

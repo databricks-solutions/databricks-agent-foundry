@@ -33,7 +33,10 @@ endpoint:
 index:
   # Three-level Unity Catalog name: catalog.schema.index_name
   name: "${var.catalog}.${var.schema}.${var.index_name}"
-  primary_key: "id"
+  # Defaults match the chunk table in the data_domains scaffold
+  # (tables/01_docs_corpus.sql). For a job that fills it from documents in a
+  # volume, see examples/portfolio_assistant/jobs/docs_ingest.
+  primary_key: "chunk_id"
 
   # DELTA_SYNC   -- auto-syncs with a source Delta table
   # DIRECT_ACCESS -- user-managed CRUD via REST/SDK
@@ -52,18 +55,21 @@ index:
     # Columns to sync. Omit to sync ALL columns from the source table.
     # The primary_key and embedding source columns are always synced.
     columns_to_sync:
-      - "id"
+      - "chunk_id"
       - "content"
       - "source"
       - "doc_uri"  # Citation URI, e.g. /Volumes/catalog/schema/volume/file.pdf
+      - "page_number"
       # - "metadata"
 
     # Embeddings: choose EXACTLY ONE of the two options below.
     #
     # Option A: Databricks-managed embeddings (recommended)
     # The platform computes embeddings using a Foundation Model API endpoint.
+    # chunk_to_embed is the chunk text plus document/page context
+    # (ai_prep_search output); use "content" if your table has no such column.
     embedding_source_columns:
-      - name: "content"
+      - name: "chunk_to_embed"
         embedding_model_endpoint_name: "databricks-gte-large-en"
         # model_endpoint_name_for_query: ""  # optional: different model for queries
 

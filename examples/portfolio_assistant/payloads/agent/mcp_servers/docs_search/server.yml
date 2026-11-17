@@ -8,7 +8,7 @@
 # URL pattern: {host}/api/2.0/mcp/vector-search/{catalog}/{schema}
 # The catalog/schema must match the index's UC location, which the
 # vector_indexes brick deploys to:
-#   ${var.catalog}.${var.schema_prefix}_indexes.docs_index
+#   ${var.catalog}.${var.schema_prefix}_indexes.docs_chunks_index
 # (see vector_indexes/docs_search/index_config.yml).
 
 type: managed_vector_search
@@ -28,17 +28,17 @@ schema: "${var.schema_prefix}_indexes"
 # --instance portfolio-assistant --target dev`.  Managed Vector Search
 # exposes one tool per index, with the upstream name embedding the
 # catalog and schema:
-#   - <catalog>__<schema>__docs_index
+#   - <catalog>__<schema>__docs_chunks_index
 #
 # We tail-glob to keep the allow-list deploy-portable (catalog/schema
 # come from variables) and rename to a clean alias.  LLM sees
 # `docs_search__docs_index`.
 tools:
   allow:
-    - match: "*__*__docs_index"
+    - match: "*__*__docs_chunks_index"
       expose_as: docs_index
   default_meta:
-    columns: "id,content,source,category,doc_uri"
+    columns: "chunk_id,content,source,category,doc_uri,page_number"
     include_score: true
     num_results: 10
     query_type: "HYBRID"

@@ -15,8 +15,9 @@ hiding the gateway's error body.
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from functools import partial
-from typing import Any, Callable, Coroutine, Final, TypeVar
+from typing import Any, AsyncIterator, Callable, Coroutine, Final, TypeVar
 
 _T = TypeVar("_T")
 
@@ -56,18 +57,45 @@ def require_gateway_ok(server_url: str, headers: dict[str, str], *, timeout_seco
         raise McpGatewayError(f"{response.status_code} from {server_url}: {response.text[:_ERROR_BODY_LIMIT]}")
 
 
-async def _with_session(
-    server_url: str,
-    headers: dict[str, str],
-    fn: Callable[[Any], Coroutine[Any, Any, _T]],
-) -> _T:
+def _is_mcp_v2() -> bool:
+    import mcp
+
+    return hasattr(mcp, "Client")
+
+
+@asynccontextmanager
+async def _v1_session(server_url: str, headers: dict[str, str]) -> AsyncIterator[Any]:
     from mcp.client.session import ClientSession
     from mcp.client.streamable_http import streamablehttp_client
 
     async with streamablehttp_client(server_url, headers=headers) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
-            return await fn(session)
+            yield session
+
+
+@asynccontextmanager
+async def _v2_session(server_url: str, headers: dict[str, str]) -> AsyncIterator[Any]:
+    # mcp 2.x moved auth onto an httpx2 client and replaced ClientSession with Client.
+    from mcp import Client  # type: ignore[attr-defined]
+    from mcp.client.streamable_http import (  # type: ignore[attr-defined]
+        create_mcp_http_client,
+        streamable_http_client,
+    )
+
+    async with create_mcp_http_client(headers=headers) as http_client:
+        async with Client(streamable_http_client(server_url, http_client=http_client)) as client:
+            yield client
+
+
+async def _with_session(
+    server_url: str,
+    headers: dict[str, str],
+    fn: Callable[[Any], Coroutine[Any, Any, _T]],
+) -> _T:
+    open_session = _v2_session if _is_mcp_v2() else _v1_session
+    async with open_session(server_url, headers) as session:
+        return await fn(session)
 
 
 def _run(ws: Any, server_url: str, fn: Callable[[Any], Coroutine[Any, Any, _T]]) -> _T:

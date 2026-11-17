@@ -206,6 +206,84 @@ class TestReconcileAppSpec:
 
 
 # ---------------------------------------------------------------------------
+# instance count -- horizontal scaling after the core spec
+# ---------------------------------------------------------------------------
+
+
+def _scaled_app(count: int | None) -> mock.MagicMock:
+    app = mock.MagicMock()
+    app.compute_status = None
+    app.compute_min_instances = count
+    app.compute_max_instances = count
+    return app
+
+
+def _instance_calls(ws: mock.MagicMock) -> list[int]:
+    return [
+        c.kwargs["app"].compute_min_instances
+        for c in ws.apps.create_update_and_wait.call_args_list
+        if c.kwargs["update_mask"] == "compute_min_instances,compute_max_instances"
+    ]
+
+
+class TestScalingSteps:
+    @pytest.mark.parametrize(
+        ("current", "wanted", "steps"),
+        [
+            (None, 1, [1]),
+            (None, 3, [1, 3]),
+            (2, 3, [3]),
+            (3, 1, [1]),
+            (3, 3, []),
+        ],
+    )
+    def test_steps(self, current: int | None, wanted: int, steps: list[int]) -> None:
+        assert app_host.scaling_steps(_scaled_app(current), wanted) == steps
+
+    def test_new_app_converts_at_one_first(self) -> None:
+        assert app_host.scaling_steps(None, 2) == [1, 2]
+
+
+class TestReconcileInstances:
+    def test_unset_never_touches_scaling(self) -> None:
+        ws = mock.MagicMock()
+        ws.apps.get.return_value = _scaled_app(None)
+        app_host.reconcile_app_spec(ws, "app", "desc", [], [], "medium", dry_run=False)
+        assert _instance_calls(ws) == []
+
+    def test_standard_app_converts_then_scales(self) -> None:
+        ws = mock.MagicMock()
+        ws.apps.get.return_value = _scaled_app(None)
+        app_host.reconcile_app_spec(ws, "app", "desc", [], [], "medium", dry_run=False, instances=3)
+        assert _instance_calls(ws) == [1, 3]
+        last = ws.apps.create_update_and_wait.call_args_list[-1].kwargs["app"]
+        assert (last.compute_min_instances, last.compute_max_instances) == (3, 3)
+
+    def test_new_app_is_created_then_scaled(self) -> None:
+        ws = mock.MagicMock()
+        ws.apps.get.side_effect = Exception("RESOURCE_DOES_NOT_EXIST")
+        app_host.reconcile_app_spec(ws, "app", "desc", [], [], "medium", dry_run=False, instances=2)
+        ws.apps.create_and_wait.assert_called_once()
+        assert _instance_calls(ws) == [1, 2]
+
+    def test_matching_count_makes_no_call(self) -> None:
+        ws = mock.MagicMock()
+        ws.apps.get.return_value = _scaled_app(2)
+        app_host.reconcile_app_spec(ws, "app", "desc", [], [], "medium", dry_run=False, instances=2)
+        assert _instance_calls(ws) == []
+
+    def test_failure_fails_the_deploy(self) -> None:
+        ws = mock.MagicMock()
+        ws.apps.get.return_value = _scaled_app(2)
+        ws.apps.create_update_and_wait.side_effect = [None, RuntimeError("QUOTA_EXCEEDED")]
+        with pytest.raises(RuntimeError, match="QUOTA_EXCEEDED"):
+            app_host.reconcile_app_spec(ws, "app", "desc", [], [], "medium", dry_run=False, instances=3)
+
+    def test_dry_run_makes_no_sdk_calls(self) -> None:
+        app_host.reconcile_app_spec(None, "app", "desc", [], [], "medium", dry_run=True, instances=3)
+
+
+# ---------------------------------------------------------------------------
 # telemetry export -- destination parsing + reconcile phase 3
 # ---------------------------------------------------------------------------
 

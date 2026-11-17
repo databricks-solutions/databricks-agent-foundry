@@ -7,8 +7,8 @@ here, and only the first is a config file:
 | Path | What it is |
 |------|-----------|
 | [`payload.yml`](payload.yml) | The single config contract — model, prompt, limits, tool sourcing, context, UI, integrations |
-| [`skills/`](skills/) | What the agent knows how to do. Four skills here: `catalog-explorer`, `sql-runner`, `documentation-explorer`, `chart-renderer` |
-| [`mcp_servers/`](mcp_servers/) | Where its tools come from, with a per-server allowlist. Four servers here: Genie, Vector Search, UC functions, SQL warehouse |
+| [`skills/`](skills/) | What the agent knows how to do. Three skills here: `catalog-explorer`, `sql-runner`, `documentation-explorer` |
+| [`mcp_servers/`](mcp_servers/) | Where its tools come from, with a per-server allowlist. Three servers here: Vector Search, UC functions, SQL warehouse. Genie One comes through Unity Gateway, pinned in `payload.yml` |
 
 The two directories are **presence-based**: they are active because they exist, and
 carry no `enabled` toggle. Only *modes* live in `payload.yml`.
@@ -24,14 +24,22 @@ caching design, [Prompt caching](../../../../docs/explanation/prompt-caching.md)
 | `model` | `databricks-claude-sonnet-5-5` | `claude-sonnet-4-5` | Prompt caching needs a Claude endpoint; this one thinks |
 | `reasoning` | `thinking: adaptive`, `effort: high`, `display: summarized`, `emit: true`; `max_tokens: 16000` | unset (endpoint default) | Thinks when it helps (Sonnet 5.5 rejects `enabled`); the chat UI shows the provider summary |
 | `tools.mcp_only` | (default) `true` | `true` | Every tool call passes the MCP allowlist gate |
+| `tools.mcp.gateway.pinned` | `system.ai.genie_one_mcp`, `identity: obo` | none | Genie answers as the signed-in user, so it sees only what they may read |
+| `max_tool_calls_per_turn` | `10` | unset | Room for one Genie One ask plus its polls |
 | `tools.skills.loading` | `eager` | `eager` | Cheaper than `lazy` whenever caching is on — see below |
 | `context.prompt_cache` | on, `static_ttl: 1h` | on, `1h` | ~85% off the input bill on warm traffic |
 | `context.tool_result_clearing` | on, keep `3`, clear ≥`300K` chars or above `100K` tokens | same | Bounds long conversations without touching Lakebase; the token trigger is the safety valve |
 | `context.data_universe` | on, `refresh_minutes: 60` | **off** | Removes the "what data exists?" round trip |
+| `context.plan` | on | **off** | Multi-step requests keep a goal and milestones within the chat |
+| `context.memory` | on | **off** | The agent remembers facts about each user across chats |
+| `tools.skills.user_skills` | on, `store: lakebase` | off | Users write and pick their own playbooks in the resources panel |
 | `inject_time_user` | (default) `true` | `true` | Agent knows who is asking and what time it is |
-| `ui.chat_history` | on | on | Lakebase-backed history across sessions |
-| `ui.file_upload` | **off** | off | Untrusted-input parsers; opt in only if needed |
-| `ui.charts`, `ui.feedback` | on | on | `chart-renderer` needs charts on |
+| `ui.chat_history` | on | on | Lakebase-backed history across sessions; plan, memory and user skills live there too |
+| `ui.file_upload` | on, with `images` | off | Users attach spreadsheets, documents and screenshots; the parsers run in an isolated process |
+| `ui.charts`, `ui.feedback` | on | on | Charts add the `_chart` tool, which plots SQL results |
+| `ui.reports` | on | **off** | Long answers become downloadable Markdown reports |
+| `ui.resources_sidebar` | on | off | Users see the agent's MCPs and skills and manage their own skills |
+| `ui.speech_input` | **off** | off | Needs a Whisper GPU serving endpoint; see the commented block in `payload.yml` |
 | `ui.tool_output.expanded` | (default) `false` | `false` | Wide SQL results would bury the answer behind raw panels |
 | `integrations.a2a` | on, with card | off | Other agents can discover and call this one |
 | `integrations.mcp_server` | on | off | Other systems can consume this agent as a tool |
@@ -169,14 +177,17 @@ picked up within `refresh_minutes`.
 
 `ui.enabled: false` makes the payload headless — the API is served, the bundled chat UI
 is not. Useful when the agent is consumed only over A2A/MCP or by your own front end.
-With the UI on, four features toggle independently:
+With the UI on, these features toggle independently:
 
 | Toggle | On here | What it adds, and what to weigh |
 |---|---|---|
-| `chat_history` | yes | Persistent history in Lakebase, provisioned by the `app` brick. Off means every page load starts a fresh conversation |
-| `file_upload` | no | Mounts the upload route *and* launches an isolated extractor process with its own parser dependencies. Default-off deliberately: those parsers face untrusted input, so enable it only if uploads are part of the job |
-| `charts` | yes | Renders `echarts-chart` specs inline. The `chart-renderer` skill is pointless without it |
+| `chat_history` | yes | Persistent history in Lakebase, provisioned by the `app` brick. Off means every page load starts a fresh conversation, and plan, memory and user skills cannot be used |
+| `file_upload` | yes | Mounts the upload route *and* launches an isolated extractor process with its own parser dependencies. Those parsers face untrusted input; turn it off if uploads are not part of the job |
+| `charts` | yes | Adds the `_chart` tool and its guidance: the agent passes a query and columns, and the chart renders inline without the rows passing through the model |
 | `feedback` | yes | Thumbs up/down written to the trace, which is what makes production evaluation possible later |
+| `reports` | yes | The agent can hand back a long answer as a Markdown report the user copies or downloads |
+| `resources_sidebar` | yes | Side panel with the agent's MCPs and skills; required for user skills |
+| `speech_input` | no | Mic button that transcribes into the composer. Needs a Whisper serving endpoint on a GPU (`agent-foundry scaffold speech_input`), so it stays off in the shipped example |
 
 `tool_output` sits alongside them but is a presentation *mode* rather than a mount
 toggle — the tool-call panels are always there, and `expanded` only decides whether

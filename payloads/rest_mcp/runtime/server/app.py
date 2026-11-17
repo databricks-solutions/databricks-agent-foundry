@@ -45,12 +45,30 @@ from payloads.rest_mcp.runtime.server.registry import build_api_server
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from starlette.types import ASGIApp, Receive, Scope, Send
+
 ClientFactory = Callable[[ApiSpec], httpx.AsyncClient]
+# Unity Gateway discovery expects an App-hosted MCP server at the App's /mcp.
+_DISCOVERY_PATH = "/mcp"
 
 
 def default_client_factory(api: ApiSpec) -> httpx.AsyncClient:
     """One client per API, defaulting the transport timeout to ``timeout_s``."""
     return httpx.AsyncClient(timeout=api.rest.defaults.timeout_s)
+
+
+@dataclass(frozen=True)
+class _AsgiEndpoint:
+    """Lets ``Route`` serve an ASGI callable on one exact path.
+
+    ``Route`` wraps plain functions and bound methods as request handlers, so a
+    session manager's ``handle_request`` has to be passed as a callable object.
+    """
+
+    app: ASGIApp
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        await self.app(scope, receive, send)
 
 
 @dataclass(frozen=True)
@@ -68,7 +86,8 @@ def build_app(
 ) -> Starlette:
     """Build the Starlette app fronting every API in ``spec``.
 
-    Mounts ``/mcp/<api>`` per API plus a ``/health`` probe; the OBO
+    Mounts ``/mcp/<api>`` per API plus a ``/health`` probe.  A single-API
+    spec is also served at ``/mcp`` for Unity Gateway discovery.  The OBO
     ``x-forwarded-access-token`` is captured per request by
     :class:`ForwardedIdentityMiddleware`.
     """
@@ -97,6 +116,9 @@ def build_app(
 
     routes: list[Route | Mount] = [Route("/health", health, methods=["GET"])]
     routes += [Mount(f"/mcp/{name}", app=entry.manager.handle_request) for name, entry in mounted.items()]
+    if len(mounted) == 1:
+        [only] = mounted.values()
+        routes.append(Route(_DISCOVERY_PATH, _AsgiEndpoint(only.manager.handle_request)))
 
     return Starlette(
         routes=routes,

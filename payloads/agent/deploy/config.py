@@ -146,6 +146,7 @@ def env_overrides_from_spec(spec: AgentPayloadSpec) -> dict[str, str]:
         "FILE_UPLOAD_MAX_MB": str(ui.file_upload.max_mb),
         "ENABLE_IMAGE_INPUT": _bool_env(ui.file_upload.enabled and ui.file_upload.images),
         "ENABLE_CHARTS": _bool_env(ui.charts.enabled),
+        "ENABLE_REPORTS": _bool_env(ui.reports.enabled),
         "ENABLE_FEEDBACK": _bool_env(ui.feedback.enabled),
         "TOOL_OUTPUT_EXPANDED": _bool_env(ui.tool_output.expanded),
         "CHAT_MAX_WIDTH": ui.chat_layout.width,

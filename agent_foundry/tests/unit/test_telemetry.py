@@ -76,6 +76,52 @@ def test_nested_jobs_emit_single_brick_extra(tmp_path: Path) -> None:
     assert ("cmd", "deploy") in pairs
 
 
+_PIPELINE_ID = "70ec03e2-7c59-425b-bb71-a768b63c5c7b"
+_ENDPOINT_ID = "21411cc2-9410-4224-8213-74edf0947081"
+
+
+def _vs_result(name: str = "docs", status: str = "ok", **details: Any) -> BrickResult:
+    return BrickResult(name=name, status=status, details=details)
+
+
+def _vs_pairs(tmp_path: Path, *results: BrickResult) -> list[tuple[str, str]]:
+    pairs = extras_from_deploy(_deploy_result({"Vector Search": list(results)}), tmp_path)
+    return [(k, v) for k, v in pairs if k.startswith("vs_")]
+
+
+def test_vs_dedicated_endpoint_and_pipeline_ids(tmp_path: Path) -> None:
+    result = _vs_result(pipeline_id=_PIPELINE_ID, endpoint_id=_ENDPOINT_ID, endpoint_num_indexes=1)
+
+    assert _vs_pairs(tmp_path, result) == [("vs_endpoint", _ENDPOINT_ID), ("vs_pipeline", _PIPELINE_ID)]
+
+
+def test_vs_shared_endpoint_is_flagged(tmp_path: Path) -> None:
+    result = _vs_result(endpoint_id=_ENDPOINT_ID, endpoint_num_indexes=4)
+
+    assert _vs_pairs(tmp_path, result) == [("vs_endpoint_shared", _ENDPOINT_ID)]
+
+
+def test_vs_ids_dedup_across_indexes(tmp_path: Path) -> None:
+    shared: dict[str, Any] = {"endpoint_id": _ENDPOINT_ID, "endpoint_num_indexes": 2}
+
+    pairs = _vs_pairs(tmp_path, _vs_result("docs", **shared), _vs_result("faq", **shared))
+
+    assert pairs == [("vs_endpoint_shared", _ENDPOINT_ID)]
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        _vs_result(status="deploy_error", pipeline_id=_PIPELINE_ID, endpoint_id=_ENDPOINT_ID),
+        _vs_result(pipeline_id="docs_index", endpoint_id="vs_docs_demo"),
+        _vs_result(),
+    ],
+    ids=["failed_deploy", "names_not_uuids", "no_ids"],
+)
+def test_vs_ids_skipped(tmp_path: Path, result: BrickResult) -> None:
+    assert _vs_pairs(tmp_path, result) == []
+
+
 def test_payload_and_mcp_presence(tmp_path: Path) -> None:
     payload_dir = tmp_path / "payloads" / "agent"
     payload_dir.mkdir(parents=True)

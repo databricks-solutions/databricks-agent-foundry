@@ -15,6 +15,6 @@ SELECT
 FROM `${var.catalog}`.`${var.schema}`.mlflow_experiment_trace_metadata
 LATERAL VIEW EXPLODE(assessments) AS a
 WHERE (DATE(a.last_update_time) BETWEEN :time_range.min AND :time_range.max OR :time_range IS NULL)
-  AND a.source.source_type = 'CODE'
+  AND a.source.source_type IN ('CODE', 'LLM_JUDGE')
 GROUP BY 1, 2
 ORDER BY score_date, scorer

@@ -1051,6 +1051,18 @@ class FeatureToggle(BaseModel):
     enabled: bool = True
 
 
+class ReportsUI(BaseModel):
+    """``spec.ui.reports`` -- Markdown reports in the chat.
+
+    Off by default.  Renders ``markdown-report`` fences as a report card the
+    user can copy or download as ``.md``, and offers the agent ``_report``.
+    """
+
+    model_config = _SPEC_CONFIG
+
+    enabled: bool = False
+
+
 class ToolOutputUI(BaseModel):
     """``spec.ui.tool_output`` -- how tool-call panels render in the chat.
 
@@ -1142,6 +1154,7 @@ class AgentUISpec(BaseModel):
     file_upload: FileUploadUI = FileUploadUI()
     feedback: FeatureToggle = FeatureToggle()
     charts: FeatureToggle = FeatureToggle()
+    reports: ReportsUI = ReportsUI()
     tool_output: ToolOutputUI = ToolOutputUI()
     chat_layout: ChatLayoutUI = ChatLayoutUI()
     resources_sidebar: ResourcesSidebarUI = ResourcesSidebarUI()

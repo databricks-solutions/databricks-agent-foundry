@@ -11,9 +11,9 @@ import pytest
 
 from agent_foundry.contracts.mcp import ToolAllowEntry
 from payloads.agent.runtime.mcp_wrapper import FilteredMCPServerStreamableHttp
+from payloads.agent.runtime.sql_rerun import READ_ONLY_SQL_TOOL
 from payloads.agent.runtime.sql_result_compact import DEFAULT_ROW_CAP, MAX_CELL_CHARS, MAX_RESULT_CHARS
 from payloads.agent.runtime.sql_result_read import (
-    READ_ONLY_SQL_TOOL,
     READ_RESULT_TOOL_NAME,
     ReadResult,
     prepare_result_reader,

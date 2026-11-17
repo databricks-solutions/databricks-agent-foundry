@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict
 
 from agent_foundry.bricks import (
@@ -37,6 +39,30 @@ class VectorIndexState(BaseModel):
     index_name: str
     endpoint_name: str
     index_type: str
+
+
+def billing_ids(ws: Any, index_name: str, endpoint_name: str) -> dict[str, Any]:
+    """IDs that ``system.billing.usage`` keys Vector Search cost on (#811).
+
+    Billing carries no index tags, only ``dlt_pipeline_id`` (index sync) and
+    ``endpoint_id`` (endpoint compute, shared by every index on it).  Lookup
+    failures are swallowed so attribution never fails a deploy.
+    """
+    ids: dict[str, Any] = {}
+    try:
+        spec = ws.vector_search_indexes.get_index(index_name).delta_sync_index_spec
+        if spec is not None and spec.pipeline_id:
+            ids["pipeline_id"] = spec.pipeline_id
+    except Exception:
+        pass
+    try:
+        endpoint = ws.vector_search_endpoints.get_endpoint(endpoint_name)
+        if endpoint.id:
+            ids["endpoint_id"] = endpoint.id
+            ids["endpoint_num_indexes"] = endpoint.num_indexes
+    except Exception:
+        pass
+    return ids
 
 
 class VectorIndexesBrick(StandardLayoutBrick):
@@ -99,11 +125,15 @@ class VectorIndexesBrick(StandardLayoutBrick):
             print(f"  [{sub.name}] Validated OK (type={idx_type})")
 
             rc = deploy_vs_index(sub, ctx.target, ctx.variables, action=None, dry_run=ctx.dry_run, ws=ctx.ws)
+            details: dict[str, Any] = {}
+            if rc == 0 and not ctx.dry_run and ctx.ws is not None:
+                details = billing_ids(ctx.ws, config["index"]["name"], config["endpoint"]["name"])
             results.append(
                 BrickResult(
                     name=sub.name,
                     status="ok" if rc == 0 else "deploy_error",
                     rc=rc,
+                    details=details,
                 )
             )
 

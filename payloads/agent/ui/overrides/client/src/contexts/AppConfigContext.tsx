@@ -15,6 +15,7 @@ interface ConfigResponse {
     fileUpload: boolean;
     imageInput: boolean;
     charts: boolean;
+    reports: boolean;
     toolOutputExpanded: boolean;
     chatWidth?: string;
     resourcesSidebar: boolean;
@@ -40,6 +41,7 @@ interface AppConfigContextType {
   fileUploadEnabled: boolean;
   imageInputEnabled: boolean;
   chartsEnabled: boolean;
+  reportsEnabled: boolean;
   toolOutputExpanded: boolean;
   /** Tailwind `max-w-*` class capping the chat column. */
   chatWidthClass: string;
@@ -80,6 +82,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
     fileUploadEnabled: data?.features.fileUpload ?? false,
     imageInputEnabled: data?.features.imageInput ?? false,
     chartsEnabled: data?.features.charts ?? false,
+    reportsEnabled: data?.features.reports ?? false,
     // Pre-fetch fallback matches the spec default (collapsed), so panels
     // rendered before /api/config resolves do not flash open.
     toolOutputExpanded: data?.features.toolOutputExpanded ?? false,

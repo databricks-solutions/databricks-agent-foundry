@@ -29,7 +29,7 @@ def _query_when_ready(ws: Any, index_name: str) -> Any:
     while True:
         try:
             return ws.vector_search_indexes.query_index(
-                index_name, columns=["id", "content"], query_text=_QUERY, num_results=1
+                index_name, columns=["chunk_id", "content"], query_text=_QUERY, num_results=1
             )
         except (BadRequest, NotFound) as exc:
             if not _still_provisioning(exc):

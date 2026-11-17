@@ -9,8 +9,14 @@
 # Scorer names reference:
 #   Built-in LLM judges:  Safety, RelevanceToQuery, RetrievalGroundedness,
 #                         Correctness, ToolCallCorrectness, Guidelines
-#   Custom scorers:       tool_routing_accuracy, genie_sql_correctness,
-#                         response_quality
+#   Custom scorers:       tool_routing_accuracy, genie_sql_correctness
+#   Instance scorers:     any Scorer defined in
+#                         instances/<name>/evaluation/scorers/*.py,
+#                         referenced by its name
+#
+# Built-in judges also accept {name, args} entries, e.g.
+#   - name: Guidelines
+#     args: {name: grounding, guidelines: "Every factual claim is supported by tool outputs"}
 
 # --- Development evaluation (mlflow.genai.evaluate) ---
 scorers:
@@ -20,9 +26,9 @@ scorers:
     - RelevanceToQuery
 
   # Applied when evaluation data includes expectations.
-  # NOTE: ToolCallCorrectness temporarily removed from default preset.
-  # MLflow 3.11.x tool-extractor fails pydantic validation on every trace
-  # (issue #48). Prefer `tool_routing_accuracy` for deterministic
+  # NOTE: ToolCallCorrectness is not in the default preset. Its verdicts
+  # are correct, but the Databricks judge often returns unparseable JSON
+  # (issue #62), so rows error. Prefer `tool_routing_accuracy` for deterministic
   # tool-routing signal. Opt back in by adding `- ToolCallCorrectness`
   # to an instance-level eval_config.yml.
   with_ground_truth:
@@ -37,7 +43,6 @@ scorers:
   custom:
     - tool_routing_accuracy
     - genie_sql_correctness
-    - response_quality
 
 # Maximum traces to fetch in --mode traces
 max_traces: 100
@@ -51,4 +56,3 @@ production_monitoring:
   scorers:
     - Safety
     - RelevanceToQuery
-    - response_quality

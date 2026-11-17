@@ -50,6 +50,36 @@ def _max_upload_bytes() -> int:
     return megabytes * 1024 * 1024
 
 
+def _max_concurrent_extractions() -> int:
+    return max(1, _env.read_int(_env.FILE_UPLOAD_MAX_CONCURRENCY, fallback=4) or 4)
+
+
+class _ConcurrencyGate:
+    """Caps simultaneous parse workers (§7 abuse guard).
+
+    Each ``/extract`` spawns an isolated subprocess, so an authenticated
+    user flooding the endpoint could otherwise launch unbounded workers and
+    exhaust the container.  ``acquire`` is a synchronous check-and-increment
+    (atomic under single-threaded asyncio); excess callers are rejected with
+    HTTP 429 rather than queued.
+    """
+
+    def __init__(self) -> None:
+        self._active = 0
+
+    def acquire(self, limit: int) -> bool:
+        if self._active >= limit:
+            return False
+        self._active += 1
+        return True
+
+    def release(self) -> None:
+        self._active -= 1
+
+
+_extraction_gate = _ConcurrencyGate()
+
+
 def _too_large_detail(limit: int) -> str:
     return f"file exceeds the {limit // (1024 * 1024)} MB upload cap"
 
@@ -129,25 +159,33 @@ async def health() -> dict[str, str]:
 
 @router.post("/extract")
 async def extract(file: UploadFile = File(...)) -> dict[str, Any]:
-    limit = _max_upload_bytes()
-    # Bounded read: pull at most limit+1 bytes so we never materialise an
-    # oversized body in memory; the spool / middleware bound the wire read.
-    data = await file.read(limit + 1)
-    if len(data) > limit:
-        raise HTTPException(status_code=413, detail=_too_large_detail(limit))
-    filename = file.filename or "upload"
+    # Reject before spawning a parse worker.  Starlette has already spooled
+    # the multipart body by now (bounded by the size middleware), so the
+    # gate caps subprocess CPU/memory, not wire reads.
+    if not _extraction_gate.acquire(_max_concurrent_extractions()):
+        raise HTTPException(status_code=429, detail="too many concurrent uploads; retry shortly")
     try:
-        # Parse in a disposable subprocess (timeout-kill + crash/OOM
-        # isolation), off the event loop so concurrent requests proceed.
-        payload = await asyncio.to_thread(run_isolated, data, filename, _PARSE_TIMEOUT_SECONDS)
-    except ExtractionError as exc:
-        # User-safe message (unsupported type / missing parser / bad input).
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except ExtractionTimeout as exc:
-        raise HTTPException(status_code=504, detail="extraction timed out") from exc
-    except ExtractionCrash as exc:
-        raise HTTPException(status_code=500, detail="extraction failed unexpectedly") from exc
-    return payload
+        limit = _max_upload_bytes()
+        # Bounded read: pull at most limit+1 bytes so we never materialise an
+        # oversized body in memory; the spool / middleware bound the wire read.
+        data = await file.read(limit + 1)
+        if len(data) > limit:
+            raise HTTPException(status_code=413, detail=_too_large_detail(limit))
+        filename = file.filename or "upload"
+        try:
+            # Parse in a disposable subprocess (timeout-kill + crash/OOM
+            # isolation), off the event loop so concurrent requests proceed.
+            payload = await asyncio.to_thread(run_isolated, data, filename, _PARSE_TIMEOUT_SECONDS)
+        except ExtractionError as exc:
+            # User-safe message (unsupported type / missing parser / bad input).
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ExtractionTimeout as exc:
+            raise HTTPException(status_code=504, detail="extraction timed out") from exc
+        except ExtractionCrash as exc:
+            raise HTTPException(status_code=500, detail="extraction failed unexpectedly") from exc
+        return payload
+    finally:
+        _extraction_gate.release()
 
 
 def create_app() -> FastAPI:

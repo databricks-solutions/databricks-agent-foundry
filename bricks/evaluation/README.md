@@ -79,13 +79,95 @@ For agents that make many Genie calls, reduce per-turn pressure by instructing t
 | `ToolCallCorrectness` | Built-in LLM | Opt-in | No | Correct tool calls (see note below) |
 | `tool_routing_accuracy` | Custom code | Yes | **No** | Agent routed to expected tools (needs `expectations`) |
 | `genie_sql_correctness` | Custom code | Yes | **No** | Genie produced expected SQL (needs `expectations`) |
-| `response_quality` | Custom code | Yes | Yes | Length, sources, latency |
 
 Scorers marked **No** for prod require `expectations` (ground truth), which is unavailable for live traces.
 
-> **Note on `ToolCallCorrectness`:** Degraded on MLflow 3.11.x -- the built-in LLM tool-extractor fails pydantic validation on every trace. It is intentionally excluded from the default `with_ground_truth` preset; prefer `tool_routing_accuracy` for deterministic tool-routing signal. Instances that want the built-in judge can opt in by adding `- ToolCallCorrectness` to their own `instances/<name>/evaluation/eval_config.yml`.
+> **Note on `ToolCallCorrectness`:** Its verdicts are correct, but the Databricks judge often returns JSON that MLflow cannot parse (it quotes tool arguments without escaping them), so those rows error instead of scoring ([#62](the public issue tracker)). It is intentionally excluded from the default `with_ground_truth` preset; prefer `tool_routing_accuracy` for deterministic tool-routing signal. Instances that want the built-in judge can opt in by adding `- ToolCallCorrectness` to their own `instances/<name>/evaluation/eval_config.yml`.
 >
 > **Note on `RetrievalGroundedness`:** The built-in judge errors on every row when the trace has no `RETRIEVER` span. It is excluded from the default `traces_only` preset. Instances with a vector-search / RAG skill that emit retriever spans can opt in by adding `- RetrievalGroundedness` under `scorers.traces_only`.
+
+### Instance scorers
+
+When the catalog above does not cover a check your agent needs (a channel-relevance rule, a false-positive check, a domain-specific format), ship the scorer with the instance instead of forking the brick. Both `agent-foundry eval` and `agent-foundry monitors start` pick it up.
+
+**1. Add a module** under the instance's `evaluation/scorers/` folder:
+
+```text
+instances/<name>/evaluation/
+  eval_config.yml
+  datasets/
+  scorers/
+    channel_relevance.py     # any *.py file is loaded
+    _helpers.py              # _-prefixed files are skipped (not scanned for scorers)
+```
+
+Every MLflow `Scorer` object defined at module level is registered under its `.name`. Usually that is an `@scorer` function, whose name is the function name:
+
+```python
+# instances/<name>/evaluation/scorers/channel_relevance.py
+from mlflow.entities import Feedback
+from mlflow.genai.scorers import scorer
+
+
+@scorer
+def channel_relevance(outputs: str) -> Feedback:
+    return Feedback(value="#" in outputs, rationale="mentions a channel")
+```
+
+The function declares only the arguments it needs; MLflow passes them by name:
+
+| Argument | What it receives |
+|----------|------------------|
+| `inputs` | The dataset row's `inputs` (e.g. `{"question": ...}`) |
+| `outputs` | The agent's response |
+| `expectations` | The row's `expectations`; missing for live traces, so do not use it in production scorers |
+| `trace` | The full MLflow `Trace`, for checks over tool / retriever spans (see `scorers/routing.py`) |
+
+Return a `Feedback`, a `bool`, or a number.
+
+**2. Reference it by name** in `instances/<name>/evaluation/eval_config.yml`. The instance file replaces the brick default, so list every scorer you want to keep:
+
+```yaml
+scorers:
+  custom:
+    - tool_routing_accuracy
+    - channel_relevance
+
+production_monitoring:
+  scorers:
+    - Safety
+    - channel_relevance      # registered as "channel_relevance"
+```
+
+**3. Check it is picked up.** `--dry-run` resolves the scorers and prints the list without running the evaluation:
+
+```bash
+uv run agent-foundry eval --instance <your-app> --target dev --dry-run
+#   Scorers: 4 (safety, relevance_to_query, tool_routing_accuracy, channel_relevance)
+```
+
+Rules:
+
+- Names must be unique across the instance and must not reuse a framework scorer name (`tool_routing_accuracy`, `genie_sql_correctness`). Either case stops the run with an error, as does a module that fails to import.
+- An unknown name in `eval_config.yml` is skipped with a `WARNING: Unknown custom scorer` line, so check the dry-run output after renaming a scorer.
+- Modules are loaded by file path, not as a package: import helpers from installed packages, not from sibling files in `scorers/`.
+- Scorers used for production monitoring must be self-contained. MLflow registers only the function body and rebuilds it on the server, where MLflow names such as `Feedback` and `Trace` are available but the module's own helpers and other imports are not. Put any other imports and helper logic inside the function.
+
+### Configuring built-in judges
+
+Built-in judge entries (`default`, `with_ground_truth`, `traces_only`, `production_monitoring.scorers`) can be a plain name or a `{name, args}` mapping. `args` are passed to the MLflow judge constructor, so `Guidelines` can be given its required `guidelines` text and an optional `model`:
+
+```yaml
+scorers:
+  default:
+    - Safety
+    - name: Guidelines
+      args:
+        name: grounding
+        guidelines: "Every factual claim in the response is supported by the tool outputs."
+```
+
+Give each configured `Guidelines` judge a unique `args.name`: it becomes the result column in eval and the registration name in production monitoring, and two judges with the same name collide. Plain entries keep their existing registration names. Custom and instance scorers do not take `args`.
 
 ## Human Feedback
 
@@ -133,7 +215,7 @@ uv run agent-foundry monitors status --instance <your-app> --target dev
 | Path | Purpose |
 |------|---------|
 | `conf/eval_config.yml` | Scorer selection, experiment split, monitoring settings |
-| `scorers/` | Reusable scorer functions (built-in + custom) |
+| `scorers/` | Reusable scorer functions (built-in + custom); `registry.py` adds instance scorers ([Instance scorers](#instance-scorers)) |
 | `scripts/run_evaluation.py` | Laptop eval CLI (user OBO via `/invocations`) |
 | `scripts/register_monitors.py` | Production monitoring CLI |
 | `datasets/_template.yml` | Example evaluation dataset format |

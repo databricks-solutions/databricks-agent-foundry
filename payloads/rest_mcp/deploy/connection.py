@@ -9,10 +9,13 @@ framework's existing ``type: external`` MCP surface
 agent-runtime change and the hop stays governed by Unity Catalog.
 
 Authentication is **OAuth M2M as the hosting App's own service principal**: the
-App SP (``app.service_principal_client_id``) is the one identity that can reach
-the App (it has ``CAN_USE`` on itself), so the connection stores that SP's
-``client_id`` plus a freshly-minted OAuth secret and the workspace token
-endpoint.  U2M mapping was rejected because it drives a browser
+connection stores that SP's ``client_id`` (``app.service_principal_client_id``)
+plus a freshly-minted OAuth secret and the workspace token endpoint.  The
+platform does not put an App's SP on its own permission list, so deploy grants
+it ``CAN_USE`` (:func:`grant_app_sp_can_use`); without that the App front door
+rejects hop-1 with an empty 401 (issue #517).  This is shared, governed access:
+Unity Catalog checks ``USE CONNECTION`` on the caller, but the App only ever
+sees its own SP.  U2M mapping was rejected because it drives a browser
 authorization-code flow whose redirect URI is not registered on the App's OAuth
 client (and the workspace does not support DCR).
 
@@ -215,6 +218,29 @@ def _revoke_sp_secret(client: Any, sp_id: str, secret_id: str) -> None:
         pass
 
 
+def grant_app_sp_can_use(client: Any | None, app_name: str, app_sp_client_id: str, *, dry_run: bool = False) -> None:
+    """Grant the App's service principal ``CAN_USE`` on its own App.
+
+    ``update_permissions`` adds the entry without replacing the list, so a
+    redeploy is idempotent.
+    """
+    if client is None or dry_run:
+        print(f"  [rest_mcp] (dry-run) would grant the App service principal CAN_USE on {app_name!r}")
+        return
+    from databricks.sdk.service.apps import AppAccessControlRequest, AppPermissionLevel
+
+    client.apps.update_permissions(
+        app_name,
+        access_control_list=[
+            AppAccessControlRequest(
+                service_principal_name=app_sp_client_id,
+                permission_level=AppPermissionLevel.CAN_USE,
+            )
+        ],
+    )
+    print(f"  [rest_mcp] granted the App service principal CAN_USE on {app_name!r}")
+
+
 def provision_connections(
     client: Any | None,
     spec: RestMcpPayloadSpec,
@@ -345,6 +371,7 @@ __all__ = [
     "build_connection_options",
     "connection_name",
     "destroy_connections",
+    "grant_app_sp_can_use",
     "loaded_connections",
     "provision_connections",
 ]

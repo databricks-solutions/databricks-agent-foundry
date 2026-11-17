@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "The YAML shape of ``app/config.yml``.\n\n``compute_size`` maps to the Databricks Apps ``ComputeSize`` enum\n(``MEDIUM`` / ``LARGE``); the deploy script uppercases it before\npassing it to the SDK.\n\n``user_authorization`` is a closed enum of OBO scopes\n(:data:`UserApiScope`) so a misspelled scope fails the deploy\ninstead of being silently sent to (and rejected by) the API.",
+  "description": "The YAML shape of ``app/config.yml``.\n\n``compute_size`` maps to the Databricks Apps ``ComputeSize`` enum\n(``MEDIUM`` / ``LARGE``); the deploy script uppercases it before\npassing it to the SDK.\n\n``user_authorization`` is a closed enum of OBO scopes\n(:data:`UserApiScope`) so a misspelled scope fails the deploy\ninstead of being silently sent to (and rejected by) the API.\n\n``instances`` turns on Databricks Apps horizontal scaling with a fixed\ninstance count.  ``None`` leaves the App's scaling untouched, and\nremoving the key does not convert a scaled App back to a standard one\n(the platform only offers that in the App's Settings page).  The upper\nbound is the workspace quota (5 by default), enforced by the API.",
   "properties": {
     "app_resources": {
       "default": [],
@@ -19,6 +19,19 @@
       ],
       "title": "Compute Size",
       "type": "string"
+    },
+    "instances": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Instances"
     },
     "payloads": {
       "default": [

@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from agent_foundry import state as shared_state
-from agent_foundry.bricks import DestroyContext
+from agent_foundry.bricks import DeployContext, DestroyContext
 from agent_foundry.destroy_base import NOTHING_TO_DESTROY
 from agent_foundry.testing.fakes import FakeWorkspaceClient
-from bricks.vector_search.brick import VectorIndexesBrick
+from bricks.vector_search.brick import VectorIndexesBrick, billing_ids
 
 BRICK_ROOT = Path(__file__).resolve().parents[2]
 
@@ -357,3 +358,111 @@ class TestSyncGateOnReadiness:
 
         assert rc == 0
         assert sync_calls == ["main.test.docs_index"]
+
+
+_PIPELINE_ID = "70ec03e2-7c59-425b-bb71-a768b63c5c7b"
+_ENDPOINT_ID = "21411cc2-9410-4224-8213-74edf0947081"
+
+
+class _LookupClient(FakeWorkspaceClient):
+    """Answers the two billing-ID lookups, or raises when told to."""
+
+    def __init__(self, *, num_indexes: int = 1, fail: bool = False) -> None:
+        super().__init__()
+        self.index_lookups: list[str] = []
+        spec = SimpleNamespace(pipeline_id=_PIPELINE_ID)
+        endpoint = SimpleNamespace(id=_ENDPOINT_ID, num_indexes=num_indexes)
+
+        def get_index(index_name: str) -> Any:
+            self.index_lookups.append(index_name)
+            if fail:
+                raise RuntimeError("PERMISSION_DENIED")
+            return SimpleNamespace(delta_sync_index_spec=spec)
+
+        def get_endpoint(endpoint_name: str) -> Any:  # noqa: ARG001
+            if fail:
+                raise RuntimeError("PERMISSION_DENIED")
+            return endpoint
+
+        self.vector_search_indexes = SimpleNamespace(get_index=get_index)
+        self.vector_search_endpoints = SimpleNamespace(get_endpoint=get_endpoint)
+
+
+class TestBillingIds:
+    """``billing_ids`` returns the keys billing attributes Vector Search cost on (#811)."""
+
+    def test_returns_pipeline_and_endpoint_ids(self) -> None:
+        ids = billing_ids(_LookupClient(num_indexes=3), "cat.sch.idx", "ep")
+
+        assert ids == {"pipeline_id": _PIPELINE_ID, "endpoint_id": _ENDPOINT_ID, "endpoint_num_indexes": 3}
+
+    def test_lookup_failures_return_nothing(self) -> None:
+        assert billing_ids(_LookupClient(fail=True), "cat.sch.idx", "ep") == {}
+
+    def test_direct_access_index_has_no_pipeline(self) -> None:
+        client = _LookupClient()
+        direct_access = SimpleNamespace(delta_sync_index_spec=None)
+        client.vector_search_indexes = SimpleNamespace(get_index=lambda _name: direct_access)
+
+        assert "pipeline_id" not in billing_ids(client, "cat.sch.idx", "ep")
+
+
+class TestBrickBillingDetails:
+    """The brick puts the billing IDs on a successful, non-dry-run result."""
+
+    def _deploy(
+        self,
+        vs_instance_dir: Path,
+        vs_variables: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        client: _LookupClient,
+        rc: int = 0,
+        dry_run: bool = False,
+    ) -> Any:
+        from bricks.vector_search.scripts import deploy_index as mod
+
+        monkeypatch.setattr(mod, "deploy", lambda *a, **kw: rc)
+        ctx = DeployContext(
+            instance_dir=vs_instance_dir.parents[1],
+            target="dev",
+            variables=dict(vs_variables),
+            dry_run=dry_run,
+            ws=client,
+        )
+        [result] = VectorIndexesBrick().deploy(ctx)
+        return result
+
+    def test_successful_deploy_reports_billing_ids(
+        self, vs_instance_dir: Path, vs_variables: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _LookupClient()
+
+        result = self._deploy(vs_instance_dir, vs_variables, monkeypatch, client=client)
+
+        assert result.status == "ok"
+        assert result.details == {"pipeline_id": _PIPELINE_ID, "endpoint_id": _ENDPOINT_ID, "endpoint_num_indexes": 1}
+        assert client.index_lookups == ["test_catalog.test_schema.test_docs_index"]
+
+    def test_failed_lookup_keeps_deploy_ok(
+        self, vs_instance_dir: Path, vs_variables: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        result = self._deploy(vs_instance_dir, vs_variables, monkeypatch, client=_LookupClient(fail=True))
+
+        assert (result.status, result.details) == ("ok", {})
+
+    @pytest.mark.parametrize(("rc", "dry_run"), [(1, False), (0, True)])
+    def test_no_lookup_on_error_or_dry_run(
+        self,
+        vs_instance_dir: Path,
+        vs_variables: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+        rc: int,
+        dry_run: bool,
+    ) -> None:
+        client = _LookupClient()
+
+        result = self._deploy(vs_instance_dir, vs_variables, monkeypatch, client=client, rc=rc, dry_run=dry_run)
+
+        assert result.details == {}
+        assert client.index_lookups == []

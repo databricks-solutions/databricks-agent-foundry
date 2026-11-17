@@ -84,6 +84,26 @@ def test_unknown_mount_returns_404(tmp_path: Path) -> None:
         assert client.get("/mcp/nope").status_code == 404
 
 
+def _initialize(client: TestClient, path: str) -> Any:
+    return client.post(
+        path,
+        json=_INITIALIZE,
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+
+
+def test_single_api_is_also_served_at_mcp_root(tmp_path: Path) -> None:
+    with _build(("orders",), tmp_path) as client:
+        response = _initialize(client, "/mcp")
+    assert response.status_code == 200
+    assert '"serverInfo"' in response.text
+
+
+def test_multi_api_has_no_mcp_root(tmp_path: Path) -> None:
+    with _build(("orders", "inventory"), tmp_path) as client:
+        assert _initialize(client, "/mcp").status_code == 404
+
+
 def test_initialize_handshake(tmp_path: Path) -> None:
     with _build(("orders",), tmp_path) as client:
         response = client.post(

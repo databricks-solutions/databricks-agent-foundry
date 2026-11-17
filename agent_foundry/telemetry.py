@@ -7,8 +7,9 @@ optionally sends a once-per-process set of presence extras after deploy
 
 Privacy: extras use closed enums only for CLI cmd, payload adapter, and
 LLM serving mode. MCP types, LLM provider, and model id are taken from
-config/API and charset-sanitized. No instance names, queries, or user
-identity.
+config/API and charset-sanitized. Vector Search index sync pipeline and
+endpoint UUIDs are sent for billing attribution (UUIDs only, never names).
+No instance names, queries, or user identity.
 
 Opt out with ``AGENT_FOUNDRY_TELEMETRY_DISABLED=true``.
 """
@@ -19,7 +20,7 @@ import logging
 import re
 from importlib import metadata as _metadata
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable, TypeGuard
 
 from agent_foundry import env
 from agent_foundry.bricks import BrickResult, iter_bricks
@@ -37,6 +38,8 @@ _PING_TIMEOUT_SECONDS = 5
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9._+-]+$")
 _INVALID_EXTRA_RE = re.compile(r"[^A-Za-z0-9._+-]+")
 _MODEL_ID_MAX = 64
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+_VS_BRICK = "vector_indexes"
 
 _ALLOWED_CMD = frozenset({"deploy", "destroy", "init", "eval"})
 # Model Serving modes (Databricks FMAPI PPT / PT, external, custom).
@@ -108,6 +111,8 @@ def extras_from_lifecycle(
         results = bricks.get(display) or []
         if any(r.status == "ok" for r in results) and _valid_token(brick.name):
             pairs.append(("brick", brick.name))
+        if brick.name == _VS_BRICK:
+            pairs.extend(_vs_billing_extras(results))
     pairs.extend(_payload_extras(instance_dir))
     pairs.extend(_mcp_type_extras(instance_dir))
     pairs.extend(_llm_extras(instance_dir, ws))
@@ -120,6 +125,31 @@ def extras_from_deploy(
     ws: Any | None = None,
 ) -> list[tuple[str, str]]:
     return extras_from_lifecycle("deploy", result.bricks, instance_dir, ws)
+
+
+def _is_uuid(value: Any) -> TypeGuard[str]:
+    return isinstance(value, str) and _UUID_RE.fullmatch(value) is not None
+
+
+def _vs_billing_extras(results: list[BrickResult]) -> list[tuple[str, str]]:
+    """Billing join keys per deployed index (#811).
+
+    ``vs_pipeline`` attributes index sync cost exactly.  Endpoint compute can
+    only be attributed when the endpoint serves this one index, so a shared
+    endpoint is reported as ``vs_endpoint_shared`` (presence, no count).
+    """
+    pairs: set[tuple[str, str]] = set()
+    for result in results:
+        if result.status != "ok":
+            continue
+        pipeline_id = result.details.get("pipeline_id")
+        if _is_uuid(pipeline_id):
+            pairs.add(("vs_pipeline", pipeline_id))
+        endpoint_id = result.details.get("endpoint_id")
+        if _is_uuid(endpoint_id):
+            dedicated = result.details.get("endpoint_num_indexes") == 1
+            pairs.add(("vs_endpoint" if dedicated else "vs_endpoint_shared", endpoint_id))
+    return sorted(pairs)
 
 
 def _payload_extras(instance_dir: Path) -> list[tuple[str, str]]:

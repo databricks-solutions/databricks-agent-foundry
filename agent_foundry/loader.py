@@ -281,7 +281,7 @@ def _compose_instance_config(
         default_warehouse_id = ""
     target_warehouse_id = cli_overrides.get("warehouse_id", default_warehouse_id)
 
-    return InstanceConfig(
+    config = InstanceConfig(
         name=instance_cfg.name,
         description=instance_cfg.description,
         target_name=target_name,
@@ -300,6 +300,13 @@ def _compose_instance_config(
         warehouse=WarehouseConfig(**wh_kwargs),
         evaluation=EvaluationConfig(**eval_kwargs),
     )
+    # Lazy: payload_adapters imports this module.
+    from agent_foundry.deploy.payload_adapters import payload_app_resource_name
+
+    resource_name = payload_app_resource_name(instance_dir, config.app_resource_name)
+    if resource_name == config.app_resource_name:
+        return config
+    return config.model_copy(update={"app_resource_name_override": resource_name})
 
 
 __all__ = [

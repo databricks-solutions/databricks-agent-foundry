@@ -117,7 +117,7 @@ class TestProvision:
         assert "cat.pfx_rest_mcp" in ws.api_client.schemas
         creates = _service_creates(ws)
         assert len(creates) == 1
-        assert creates[0]["config"]["connection"]["name"] == "connections/demo_github_mcp"
+        assert creates[0]["config"]["source_connection"]["name"] == "connections/demo_github_mcp"
         assert creates[0]["config"]["include_tool_selectors"] == ["get_*", "search_repositories"]
 
     def test_reconcile_patches_selectors_policies_and_rate_limits(self, fake_ws: Any) -> None:

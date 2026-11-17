@@ -666,6 +666,9 @@
                 "max_mb": 10
               },
               "kind": "chat",
+              "reports": {
+                "enabled": false
+              },
               "resources_sidebar": {
                 "enabled": false
               },
@@ -824,6 +827,9 @@
               "max_mb": 10
             },
             "kind": "chat",
+            "reports": {
+              "enabled": false
+            },
             "resources_sidebar": {
               "enabled": false
             },
@@ -1488,6 +1494,12 @@
           "title": "Kind",
           "type": "string"
         },
+        "reports": {
+          "$ref": "#/$defs/ReportsUI",
+          "default": {
+            "enabled": false
+          }
+        },
         "resources_sidebar": {
           "$ref": "#/$defs/ResourcesSidebarUI",
           "default": {
@@ -1996,6 +2008,19 @@
         "callable_path"
       ],
       "title": "PythonFunctionTool",
+      "type": "object"
+    },
+    "ReportsUI": {
+      "additionalProperties": false,
+      "description": "``spec.ui.reports`` -- Markdown reports in the chat.\n\nOff by default.  Renders ``markdown-report`` fences as a report card the\nuser can copy or download as ``.md``, and offers the agent ``_report``.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "ReportsUI",
       "type": "object"
     },
     "RepositorySkills": {

@@ -102,6 +102,9 @@ class TestSelectionAndScaffolds:
         (tmp_path / "payloads" / "rest_mcp").mkdir(parents=True)
         assert adapter.applies_to(tmp_path, {}) is True
 
+    def test_app_resource_name_is_unity_gateway_discoverable(self) -> None:
+        assert RestMcpPayloadAdapter().app_resource_name("dev-github-app") == "mcp-dev-github"
+
     def test_declares_rest_mcp_scaffold(self) -> None:
         declarations = RestMcpPayloadAdapter().scaffolds()
 
@@ -133,11 +136,20 @@ class TestAfterReconcile:
         assert ws.posts()[0]["options"]["client_id"] == "sp-client-1"
         assert ws.service_principal_secrets_proxy.created == ["111222333"]
 
+    def test_grants_app_sp_can_use_on_its_app(self, tmp_path: Path, fake_ws: Any) -> None:
+        inst = _write_instance(tmp_path, _spec())
+        ws = fake_ws()
+        RestMcpPayloadAdapter().after_reconcile(ws, "my_proxy", self._stash(inst), dry_run=False)
+        [(app_name, acl)] = ws.apps.permission_updates
+        assert app_name == "my_proxy"
+        assert [(e.service_principal_name, e.permission_level.value) for e in acl] == [("sp-client-1", "CAN_USE")]
+
     def test_dry_run_creates_nothing(self, tmp_path: Path, fake_ws: Any) -> None:
         inst = _write_instance(tmp_path, _spec())
         ws = fake_ws()
         RestMcpPayloadAdapter().after_reconcile(ws, "my_proxy", self._stash(inst), dry_run=True)
         assert ws.api_client.calls == []
+        assert ws.apps.permission_updates == []
 
     def test_noop_without_stashed_context(self, fake_ws: Any) -> None:
         ws = fake_ws()
@@ -149,6 +161,7 @@ class TestAfterReconcile:
         ws = fake_ws(app_url="")
         RestMcpPayloadAdapter().after_reconcile(ws, "my_proxy", self._stash(inst), dry_run=False)
         assert ws.posts() == []
+        assert ws.apps.permission_updates == []
 
 
 class TestDestroyAndState:
@@ -220,7 +233,7 @@ class TestMcpServiceOrchestration:
         # Connection exists and the service was built from it.
         assert "my_proxy_orders_mcp" in ws.api_client.existing
         svc = ws.api_client.services["cat.pfx_rest_mcp.orders"]
-        assert svc["config"]["connection"]["name"] == "connections/my_proxy_orders_mcp"
+        assert svc["config"]["source_connection"]["name"] == "connections/my_proxy_orders_mcp"
 
     def test_load_state_outputs_publishes_connection_and_service(self, tmp_path: Path, fake_ws: Any) -> None:
         from agent_foundry.bricks import DeployContext

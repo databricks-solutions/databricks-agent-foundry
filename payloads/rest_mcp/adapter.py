@@ -50,6 +50,8 @@ if TYPE_CHECKING:
 _PAYLOAD_PKG_ROOT = Path(__file__).resolve().parent
 _STASH_INSTANCE_DIR = "rest_mcp__instance_dir"
 _STASH_TARGET = "rest_mcp__target"
+_DISCOVERY_PREFIX = "mcp-"
+_DEFAULT_APP_SUFFIX = "-app"
 
 
 class RestMcpPayloadAdapter:
@@ -59,6 +61,14 @@ class RestMcpPayloadAdapter:
 
     def applies_to(self, instance_dir: Path, config: Mapping[str, object]) -> bool:  # noqa: ARG002
         return has_payload(instance_dir, self.name)
+
+    def app_resource_name(self, default: str) -> str:
+        """``dev-github-app`` -> ``mcp-dev-github``.
+
+        Unity Gateway and AI Playground only discover App-hosted MCP servers
+        whose App name starts with ``mcp-``.
+        """
+        return f"{_DISCOVERY_PREFIX}{default.removesuffix(_DEFAULT_APP_SUFFIX)}"
 
     def build_payload_spec(
         self,
@@ -108,7 +118,11 @@ class RestMcpPayloadAdapter:
         """
         from pathlib import Path
 
-        from payloads.rest_mcp.deploy.connection import loaded_connections, provision_connections
+        from payloads.rest_mcp.deploy.connection import (
+            grant_app_sp_can_use,
+            loaded_connections,
+            provision_connections,
+        )
         from payloads.rest_mcp.deploy.mcp_service import provision_mcp_services
         from payloads.rest_mcp.runtime.config import load_rest_mcp_spec
 
@@ -119,8 +133,14 @@ class RestMcpPayloadAdapter:
         instance_dir = Path(instance_dir_raw)
         instance_name = instance_dir.name
         spec = load_rest_mcp_spec(instance_dir)
+        if len(spec.apis) > 1:
+            print(
+                f"  NOTE: [rest_mcp] {app_name!r} serves {len(spec.apis)} APIs; Unity Gateway discovery "
+                "only finds a single /mcp server per App, so use the UC connections instead."
+            )
 
         if dry_run or ws is None:
+            grant_app_sp_can_use(None, app_name, "", dry_run=True)
             provision_connections(
                 None,
                 spec,
@@ -152,6 +172,7 @@ class RestMcpPayloadAdapter:
             )
             return
 
+        grant_app_sp_can_use(ws, app_name, app_sp_client_id)
         provision_connections(
             ws,
             spec,

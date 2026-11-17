@@ -24,7 +24,7 @@ on:
   workflow_dispatch:
     inputs:
       scenarios:
-        description: Comma-separated scenario ids (empty = bricks,agent_payload,portfolio_assistant; rest_mcp_payload and unity_gateway_assistant are opt-in)
+        description: Comma-separated scenario ids (empty = bricks,agent_payload,portfolio_assistant,rest_mcp_proxy; rest_mcp_payload and unity_gateway_assistant are opt-in)
         required: false
         default: ""
       reset:
@@ -65,8 +65,7 @@ jobs:
         run: uv sync --frozen --extra dev
       - id: matrix
         env:
-          # rest_mcp_proxy is opt-in until its UC gateway -> App 401 is resolved.
-          AGENT_FOUNDRY_ACCEPTANCE_SCENARIOS: ${{ github.event.inputs.scenarios || 'bricks,agent_payload,portfolio_assistant' }}
+          AGENT_FOUNDRY_ACCEPTANCE_SCENARIOS: ${{ github.event.inputs.scenarios || 'bricks,agent_payload,portfolio_assistant,rest_mcp_proxy' }}
         run: |
           for kind in brick payload example; do
             uv run --no-sync python -m agent_foundry.testing.harness matrix --kind "$kind" > "/tmp/$kind.json"

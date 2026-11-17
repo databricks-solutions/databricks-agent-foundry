@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
+from contextlib import asynccontextmanager
 from email.message import Message
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, AsyncIterator
 from urllib.error import HTTPError
 
 import pytest
@@ -395,6 +397,25 @@ def test_mcp_gateway_ok_passes(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(httpx, "post", lambda *_a, **_k: httpx.Response(200, text="event: message"))
     require_gateway_ok("https://h/api/2.0/mcp/external/c", {"Authorization": "Bearer t"})
+
+
+@asynccontextmanager
+async def _fake_session(server_url: str, headers: dict[str, str]) -> AsyncIterator[str]:
+    yield f"session:{server_url}:{headers['Authorization']}"
+
+
+async def _session_name(session: str) -> str:
+    return session
+
+
+@pytest.mark.parametrize(("is_v2", "opener"), [(True, "_v2_session"), (False, "_v1_session")])
+def test_mcp_session_uses_the_installed_major(monkeypatch: pytest.MonkeyPatch, is_v2: bool, opener: str) -> None:
+    from agent_foundry.testing import mcp_session
+
+    monkeypatch.setattr(mcp_session, "_is_mcp_v2", lambda: is_v2)
+    monkeypatch.setattr(mcp_session, opener, _fake_session)
+    result = asyncio.run(mcp_session._with_session("https://h/mcp", {"Authorization": "Bearer t"}, _session_name))
+    assert result == "session:https://h/mcp:Bearer t"
 
 
 def test_workspace_api_url_always_has_https() -> None:

@@ -70,7 +70,6 @@ class TestEvalConfig:
         known_custom = {
             "tool_routing_accuracy",
             "genie_sql_correctness",
-            "response_quality",
         }
         all_known = known_builtin | known_custom
 
@@ -98,6 +97,38 @@ class TestEvalConfig:
         with open(config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
         assert "experiment_name" not in config, "experiment_name should be derived, not in the brick default"
+
+    @pytest.mark.parametrize(
+        ("config", "variables", "expected"),
+        [
+            ({"experiment_name": "/Shared/explicit"}, {"tracing_experiment": "/Shared/traces"}, "/Shared/explicit"),
+            ({}, {"tracing_experiment": "/Shared/traces"}, "/Shared/traces"),
+            ({}, None, "agent_evaluation"),
+        ],
+    )
+    def test_get_experiment_name_precedence(
+        self,
+        config: dict[str, Any],
+        variables: dict[str, str] | None,
+        expected: str,
+    ) -> None:
+        from bricks.evaluation.config import get_experiment_name
+
+        assert get_experiment_name(config, variables) == expected
+
+    @pytest.mark.parametrize("action", ["action_stop", "action_status", "action_delete"])
+    def test_monitor_actions_use_tracing_experiment(self, monkeypatch: pytest.MonkeyPatch, action: str) -> None:
+        import mlflow.genai.scorers
+
+        from bricks.evaluation.scripts import register_monitors as mod
+
+        seen: list[str] = []
+        monkeypatch.setattr(mod, "_init_mlflow_experiment", lambda name, _variables: seen.append(name))
+        monkeypatch.setattr(mlflow.genai.scorers, "list_scorers", lambda: [])
+
+        getattr(mod, action)({}, variables={"tracing_experiment": "/Shared/traces"})
+
+        assert seen == ["/Shared/traces"]
 
     def test_prod_monitoring_scorers_need_no_expectations(self) -> None:
         """Production monitoring scorers must not depend on expectations
@@ -348,7 +379,7 @@ class TestBrickStructure:
         assert (BRICK_ROOT / "scorers" / "__init__.py").exists()
 
     def test_all_scorer_modules_exist(self) -> None:
-        for module in ["builtin.py", "routing.py", "genie_accuracy.py", "response_quality.py"]:
+        for module in ["builtin.py", "routing.py", "genie_accuracy.py"]:
             path = BRICK_ROOT / "scorers" / module
             assert path.exists(), f"Missing scorer module: {path}"
 

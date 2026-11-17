@@ -51,6 +51,25 @@ bricks/vector_search/
 4. Deploy: `uv run agent-foundry brick vector_search deploy-index --instance <name>`
 5. Wire the index in **skills** (`instances/<app>/payloads/agent/skills/...`) for agent discovery (MCP registration is optional when MCP is enabled)
 
+## Getting Documents into the Source Table
+
+This brick indexes a table; it does not load documents. Ingestion is a job
+([job brick](../job/README.md)) next to a data domain that owns the volume and
+the CDF-enabled table ([data brick](../data/README.md)).
+
+The portfolio example ships a working setup to copy:
+
+- `data_domains/docs_corpus/` creates the `docs_sources` volume and the `docs_chunks` table.
+- `jobs/docs_ingest/` runs a SQL file whenever files land in the volume. The
+  file parses PDF, Office and image files with `ai_parse_document`, chunks
+  them (and `.md` / `.txt` files) with `ai_prep_search`, and merges the
+  chunks into the table. A notebook task then syncs the index.
+
+The chunk table's key is `chunk_id`, and the index embeds `chunk_to_embed`.
+These are also the defaults in `_scaffold/index_config.yml`. See
+[the portfolio example](../../examples/portfolio_assistant/README.md#source-document-citations)
+for prerequisites (region availability, Beta status).
+
 ## How to Import an Existing Index
 
 ```bash

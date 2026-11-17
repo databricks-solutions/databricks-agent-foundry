@@ -20,7 +20,8 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from payloads.agent.runtime.extractor_service import create_app  # noqa: E402
+from payloads.agent.runtime import extractor_service  # noqa: E402
+from payloads.agent.runtime.extractor_service import _ConcurrencyGate, create_app  # noqa: E402
 
 
 @pytest.fixture
@@ -94,3 +95,33 @@ def test_extract_oversized_chunked_body_returns_413(client: TestClient, monkeypa
     )
     assert resp.status_code == 413
     assert "cap" in resp.json()["detail"].lower()
+
+
+def test_concurrency_gate_caps_and_releases() -> None:
+    gate = _ConcurrencyGate()
+    assert gate.acquire(2) is True
+    assert gate.acquire(2) is True
+    assert gate.acquire(2) is False  # at limit
+    gate.release()
+    assert gate.acquire(2) is True  # slot freed
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("-1", 1), ("0", 4), ("abc", 4), ("8", 8)])
+def test_max_concurrency_is_clamped(raw: str, expected: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FILE_UPLOAD_MAX_CONCURRENCY", raw)
+    assert extractor_service._max_concurrent_extractions() == expected
+
+
+def test_extract_returns_429_when_gate_full(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(extractor_service, "_max_concurrent_extractions", lambda: 1)
+    # Occupy the only slot, then a concurrent upload must be rejected.
+    assert extractor_service._extraction_gate.acquire(1) is True
+    try:
+        resp = client.post(
+            "/extract",
+            files={"file": ("data.csv", b"a,b\n1,2\n", "text/csv")},
+        )
+        assert resp.status_code == 429
+        assert "concurrent" in resp.json()["detail"].lower()
+    finally:
+        extractor_service._extraction_gate.release()

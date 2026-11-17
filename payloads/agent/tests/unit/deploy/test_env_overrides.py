@@ -23,6 +23,7 @@ class TestEnvOverridesFromSpec:
     def test_defaults_render_as_boolean_strings(self) -> None:
         env = env_overrides_from_spec(AgentPayloadSpec())
         assert env["ENABLE_CHARTS"] == "true"
+        assert env["ENABLE_REPORTS"] == "false"
         assert env["ENABLE_FEEDBACK"] == "true"
         assert env["ENABLE_FILE_UPLOAD"] == "false"
         assert env["ENABLE_IMAGE_INPUT"] == "false"

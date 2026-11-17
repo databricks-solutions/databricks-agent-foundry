@@ -42,4 +42,21 @@ def load_eval_config(
     return yaml.safe_load(substituted) or {}
 
 
-__all__ = ["load_eval_config"]
+def get_experiment_name(
+    config: dict[str, Any],
+    variables: dict[str, str] | None = None,
+) -> str:
+    """Return the experiment name (single experiment for all traces and evaluation).
+
+    Falls back to ``variables["tracing_experiment"]`` (computed by InstanceConfig)
+    when the eval config doesn't specify an explicit experiment name.
+    """
+    name: str | None = config.get("experiment_name") or config.get("production_experiment")
+    if name:
+        return name
+    if variables and variables.get("tracing_experiment"):
+        return variables["tracing_experiment"]
+    return "agent_evaluation"
+
+
+__all__ = ["get_experiment_name", "load_eval_config"]

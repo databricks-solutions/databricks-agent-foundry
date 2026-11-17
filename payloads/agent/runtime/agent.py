@@ -45,6 +45,8 @@ from mlflow.types.responses import (
 )
 
 from agent_foundry import env
+from payloads.agent.runtime.chart_tool import prepare_chart_tool
+from payloads.agent.runtime.chat_rendering import CHAT_RENDERING_GUIDANCE
 from payloads.agent.runtime.context_layers import prepare_context_layers
 from payloads.agent.runtime.context_limit import fail_soft_notice, is_context_limit_error
 from payloads.agent.runtime.context_occupancy import (
@@ -75,6 +77,7 @@ from payloads.agent.runtime.reasoning import (
     replay_scope,
     resolve_emit_reasoning,
 )
+from payloads.agent.runtime.report_tool import prepare_report_tool
 from payloads.agent.runtime.request_context import (
     get_forwarded_headers,
     get_request_username,
@@ -94,6 +97,7 @@ from payloads.agent.runtime.stream_utils import (
     build_message_item,
     process_agent_stream_events,
     start_early_tool_outputs,
+    with_ui_parts,
 )
 from payloads.agent.runtime.tool_assembly import build_all_tools
 from payloads.agent.runtime.tool_result_clearing import run_config_for, tool_schema_chars
@@ -437,7 +441,10 @@ async def _run_invoke(
         )
     emit_reasoning = resolve_emit_reasoning(config, request.custom_inputs)
     return ResponsesAgentResponse(
-        output=[item.to_input_item() for item in result.new_items if emit_reasoning or item.type != "reasoning_item"],
+        output=with_ui_parts(
+            [item.to_input_item() for item in result.new_items if emit_reasoning or item.type != "reasoning_item"],
+            state.ui_parts,
+        ),
         custom_outputs=merge_custom_outputs(
             await _run_finalize(config, request, result, state),
             context_window_outputs(recorder, reported_input_tokens=reported_input_tokens(result.raw_responses)),
@@ -511,6 +518,7 @@ async def _run_stream(
             result.stream_events(),
             emit_reasoning=emit_reasoning,
             early_tool_outputs=early_tool_outputs,
+            ui_parts=state.ui_parts,
         )
         async for event in events:
             yield event
@@ -677,6 +685,9 @@ async def invoke_handler(request: ResponsesAgentRequest) -> ResponsesAgentRespon
             plan=layers.plan,
             history_search=prepare_history_search(_conversation_id(request), get_forwarded_headers()),
             result_reader=prepare_result_reader(mcp.servers),
+            chart_tool=prepare_chart_tool(mcp.servers),
+            report_tool=prepare_report_tool(mcp.servers),
+            chat_guidance=CHAT_RENDERING_GUIDANCE,
             unavailable_mcp=mcp.unavailable,
         )
         response = await _run_invoke(agent, messages, config["MAX_ITERATIONS"], request, config)
@@ -711,6 +722,9 @@ async def stream_handler(
             plan=layers.plan,
             history_search=prepare_history_search(_conversation_id(request), get_forwarded_headers()),
             result_reader=prepare_result_reader(mcp.servers),
+            chart_tool=prepare_chart_tool(mcp.servers),
+            report_tool=prepare_report_tool(mcp.servers),
+            chat_guidance=CHAT_RENDERING_GUIDANCE,
             unavailable_mcp=mcp.unavailable,
         )
         if notice := user_notice(mcp.unavailable):

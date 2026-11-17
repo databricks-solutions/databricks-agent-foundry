@@ -24,6 +24,7 @@ from payloads.agent.runtime.stream_utils import (
     build_message_item,
     process_agent_stream_events,
     start_early_tool_outputs,
+    with_ui_parts,
 )
 from payloads.agent.runtime.tool_output_renderers import register
 
@@ -248,14 +249,14 @@ def _early(call_id: str, output: str, name: str | None = "lookup") -> EarlyToolO
 async def _process_mixed(
     sdk_events: list[Any],
     early_outputs: asyncio.Queue[EarlyToolOutput] | None = None,
+    ui_parts: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     async def stream() -> AsyncIterator[Any]:
         for event in sdk_events:
             yield event
 
-    return [
-        _as_event_dict(event) async for event in process_agent_stream_events(stream(), early_tool_outputs=early_outputs)
-    ]
+    events = process_agent_stream_events(stream(), early_tool_outputs=early_outputs, ui_parts=ui_parts)
+    return [_as_event_dict(event) async for event in events]
 
 
 def _function_call_outputs(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -473,3 +474,44 @@ async def test_parallel_tools_mark_done_in_completion_order() -> None:
     assert result.final_output == "Done."
     follow_up = next(message for message in seen_requests[1]["messages"] if message["role"] == "assistant")
     assert [tool_call["id"] for tool_call in follow_up["tool_calls"]] == ["call_fast", "call_mid", "call_slow"]
+
+
+# ---------------------------------------------------------------------------
+# UI parts -- markdown a tool files for the user, never the model
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ui_part_follows_its_tool_output_once() -> None:
+    ui_parts = {"c1": "```echarts-chart\n{}\n```"}
+    events = await _process_mixed(
+        [_tool_call_event("c1", "_chart"), _sdk_tool_output_event("c1", "summary")],
+        ui_parts=ui_parts,
+    )
+    assert _done_item_types(events) == [("function_call_output", "c1"), ("message", "")]
+    assert events[-1]["item"]["content"][0]["text"] == "```echarts-chart\n{}\n```"
+    assert ui_parts == {}
+
+
+@pytest.mark.asyncio
+async def test_early_output_carries_its_ui_part() -> None:
+    queue: asyncio.Queue[EarlyToolOutput] = asyncio.Queue()
+    queue.put_nowait(_early("c1", "summary", name="_chart"))
+    events = await _process_mixed(
+        [_tool_call_event("c1", "_chart"), _sdk_tool_output_event("c1", "summary")],
+        early_outputs=queue,
+        ui_parts={"c1": "chart"},
+    )
+    assert _done_item_types(events) == [("function_call_output", "c1"), ("message", "")]
+
+
+def test_with_ui_parts_places_each_part_after_its_tool_output() -> None:
+    call = {"type": "function_call", "call_id": "c1"}
+    output = {"type": "function_call_output", "call_id": "c1", "output": "summary"}
+    other = {"type": "function_call_output", "call_id": "c2", "output": "rows"}
+    ui_parts = {"c1": "chart"}
+    items = with_ui_parts([call, output, other], ui_parts)
+    assert items[:2] == [call, output]
+    assert items[2]["type"] == "message" and items[2]["content"][0]["text"] == "chart"
+    assert items[3] == other
+    assert ui_parts == {}

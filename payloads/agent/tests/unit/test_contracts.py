@@ -61,6 +61,7 @@ class TestAgentPayloadSpecDefaults:
         assert spec.ui.file_upload.max_mb == 10
         assert spec.ui.feedback.enabled is True
         assert spec.ui.charts.enabled is True
+        assert spec.ui.reports.enabled is False
         # Tool panels start collapsed unless a payload opts in.
         assert spec.ui.tool_output.expanded is False
         # integrations

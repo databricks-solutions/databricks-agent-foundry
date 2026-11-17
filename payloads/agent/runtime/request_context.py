@@ -34,15 +34,29 @@ class RequestState:
     no reset/finalize hooks exist), so a tool reading it must tolerate
     ``None`` and use ``data.setdefault(...)`` rather than assume ``reset``
     seeded anything.
+
+    ``ui_parts`` holds markdown a tool wants shown to the user right after
+    its result, keyed by ``call_id``.  The output path takes each entry out
+    once; it never reaches the model.
     """
 
     request: Any = None
     data: dict[str, Any] = dataclasses.field(default_factory=dict)
+    ui_parts: dict[str, str] = dataclasses.field(default_factory=dict)
 
 
 def new_request_state(request: Any = None) -> "RequestState":
     """Construct a fresh :class:`RequestState` for one request."""
     return RequestState(request=request)
+
+
+def ui_outbox(ctx: Any) -> tuple[dict[str, str], str] | None:
+    """The request's :attr:`RequestState.ui_parts` and this tool call's id, when the run has both."""
+    ui_parts = getattr(getattr(ctx, "context", None), "ui_parts", None)
+    call_id = getattr(ctx, "tool_call_id", None)
+    if not isinstance(ui_parts, dict) or not isinstance(call_id, str) or not call_id:
+        return None
+    return ui_parts, call_id
 
 
 # ---------------------------------------------------------------------------

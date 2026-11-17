@@ -13,10 +13,19 @@ the framework lives in ``site-packages/`` after ``uv sync``.
 """
 from __future__ import annotations
 
+import re
 from importlib.resources import files
 from pathlib import Path
 
 import yaml
+
+_COLUMN_DEFINITION = re.compile(r"^\s+(\w+)\s+[A-Z]+,?$", re.MULTILINE)
+
+
+def _create_table_columns(sql: str) -> set[str]:
+    """Column names declared in the first CREATE TABLE statement of *sql*."""
+    create = sql[sql.index("CREATE TABLE") :].split(") USING", 1)[0]
+    return set(_COLUMN_DEFINITION.findall(create))
 
 # ---------------------------------------------------------------------------
 # foundry.toml (per-instance, replaces the pre-#191 instance.yml contract)
@@ -76,6 +85,28 @@ class TestAgentConfig:
 
         config = load_agent_config(instance_dir)
         assert len(config["SYSTEM_PROMPT"]) > 20, "System prompt too short"
+
+    def test_showcases_capabilities_without_extra_infrastructure(self, instance_dir: Path):
+        """Every capability that needs no extra infrastructure is on; speech input
+        stays off because it needs a GPU serving endpoint."""
+        from payloads.agent.contracts import AgentPayloadSpec
+
+        raw = yaml.safe_load((instance_dir / "payloads" / "agent" / "payload.yml").read_text())
+        spec = AgentPayloadSpec.model_validate(raw["payload"]["spec"])
+
+        enabled = {
+            "plan": spec.runtime.context.plan.enabled,
+            "memory": spec.runtime.context.memory.enabled,
+            "user_skills": spec.runtime.tools.skills.user_skills.enabled,
+            "file_upload": spec.ui.file_upload.enabled,
+            "images": spec.ui.file_upload.images,
+            "reports": spec.ui.reports.enabled,
+            "resources_sidebar": spec.ui.resources_sidebar.enabled,
+            "charts": spec.ui.charts.enabled,
+            "feedback": spec.ui.feedback.enabled,
+        }
+        assert all(enabled.values()), enabled
+        assert not spec.ui.speech_input.enabled
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +174,7 @@ class TestDataDomains:
     def test_docs_corpus_declares_volume_and_doc_uri(self, instance_dir: Path):
         docs_domain = instance_dir / "data_domains" / "docs_corpus"
         volume_sql = docs_domain / "volumes" / "00_docs_sources.sql"
-        table_sql = docs_domain / "tables" / "01_docs.sql"
+        table_sql = docs_domain / "tables" / "01_docs_chunks.sql"
 
         assert volume_sql.exists()
         assert "CREATE VOLUME IF NOT EXISTS" in volume_sql.read_text()
@@ -355,6 +386,21 @@ class TestVectorIndexes:
         assert "doc_uri" in columns_to_sync
         assert "doc_uri" in result_columns
 
+    def test_docs_search_columns_exist_in_chunk_table(self, instance_dir: Path):
+        index_path = instance_dir / "vector_indexes" / "docs_search" / "index_config.yml"
+        table_sql = instance_dir / "data_domains" / "docs_corpus" / "tables" / "01_docs_chunks.sql"
+
+        index = yaml.safe_load(index_path.read_text())["index"]
+        delta_sync = index["delta_sync"]
+        referenced = {
+            index["primary_key"],
+            *delta_sync["columns_to_sync"],
+            *(column["name"] for column in delta_sync["embedding_source_columns"]),
+        }
+
+        assert delta_sync["source_table"].endswith(".docs_chunks")
+        assert referenced <= _create_table_columns(table_sql.read_text())
+
 
 # ---------------------------------------------------------------------------
 # jobs/docs_ingest
@@ -379,11 +425,19 @@ class TestDocsIngest:
         assert arrival.wait_after_last_change_seconds is not None
         assert arrival.wait_after_last_change_seconds > 60
 
-    def test_ingest_notebook_exists(self, instance_dir: Path):
+    def test_task_sources_exist(self, instance_dir: Path):
         job_dir = instance_dir / "jobs" / "docs_ingest"
         config = yaml.safe_load((job_dir / "job.yml").read_text())
-        notebook = config["tasks"][0]["notebook_task"]["notebook_path"]
-        assert (job_dir / notebook.removeprefix("./")).is_file()
+        sources = [
+            task.get("notebook_task", {}).get("notebook_path")
+            or task.get("sql_task", {}).get("file", {}).get("path")
+            for task in config["tasks"]
+        ]
+
+        assert len(sources) == 2
+        for source in sources:
+            assert source and source.startswith("./"), source
+            assert (job_dir / source.removeprefix("./")).is_file(), source
 
 
 # ---------------------------------------------------------------------------

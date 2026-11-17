@@ -1,6 +1,6 @@
 [project]
 name = "agent-foundry"
-version = "1.4.0"
+version = "1.5.0"
 description = "Composable building blocks for Databricks AI Agent applications"
 requires-python = ">=3.11,<3.14"
 readme = "README.md"
@@ -581,7 +581,9 @@ override-dependencies = [
     # pip install still enforces it against the exported constraints.
     "graphql-core>=3.2.12,<3.3",
     # Dependabot #234 (unbounded tracestate parsing). Transitive via mlflow-skinny.
-    "opentelemetry-api>=1.45.1",
+    # Dependabot #274 (quadratic traceparent parsing). Floor 1.45.2; upgrade
+    # opentelemetry-sdk with it, since the SDK pins api exactly.
+    "opentelemetry-api>=1.45.2",
     # Dependabot #261 (emSign roots with compromised intermediate keys).
     "certifi>=2026.10.18",
     # Dependabot #250, #259-#260 (ReadWriteLock / SoftFileLock on shared hosts).

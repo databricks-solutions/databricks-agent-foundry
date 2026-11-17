@@ -9,8 +9,14 @@
 # Scorer names reference:
 #   Built-in LLM judges:  Safety, RelevanceToQuery, RetrievalGroundedness,
 #                         Correctness, ToolCallCorrectness, Guidelines
-#   Custom scorers:       tool_routing_accuracy, genie_sql_correctness,
-#                         response_quality
+#   Custom scorers:       tool_routing_accuracy, genie_sql_correctness
+#   Instance scorers:     any Scorer defined in
+#                         evaluation/scorers/*.py of this instance,
+#                         referenced by its name
+#
+# Built-in judges also accept {name, args} entries, e.g.
+#   - name: Guidelines
+#     args: {name: grounding, guidelines: "Every factual claim is supported by tool outputs"}
 #
 # Safety legend:
 #   SAFE TO CHANGE    -- deployer can freely modify
@@ -33,7 +39,6 @@ scorers:
   custom:
     - tool_routing_accuracy
     - genie_sql_correctness
-    - response_quality
 
 # SAFE TO CHANGE: maximum traces to fetch in --mode traces.
 # Higher = more eval coverage but slower run and more $.
@@ -49,4 +54,3 @@ production_monitoring:
   scorers:
     - Safety
     - RelevanceToQuery
-    - response_quality

@@ -138,6 +138,7 @@ class AgentPayloadAdapter:
             user_scopes=gateway_user_scopes(app_cfg.get("user_authorization", []), agent_spec),
             sp_grants=app_cfg.get("sp_grants", []),
             compute_size=app_cfg.get("compute_size", "medium"),
+            instances=app_cfg.get("instances"),
             telemetry_destination=app_cfg.get("telemetry_destination"),
         )
 

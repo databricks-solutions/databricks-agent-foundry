@@ -76,7 +76,8 @@ data-domain table).
 
 Default scenarios (override with the workflow_dispatch `scenarios` input or
 `AGENT_FOUNDRY_ACCEPTANCE_SCENARIOS`): `bricks`, `agent_payload`,
-`portfolio_assistant`. `rest_mcp_payload` is opt-in.
+`portfolio_assistant`, `rest_mcp_proxy`. `rest_mcp_payload` and
+`unity_gateway_assistant` are opt-in.
 
 Each canary job:
 
@@ -100,16 +101,11 @@ the same workspace names.
 Daily (and `workflow_dispatch`). Report-only: lists leaked Apps. Uses the
 same environment and index as acceptance. It does not delete resources.
 
-### Dependabot helpers
+### Dependabot
 
-| File | Role |
-|------|------|
-| `.github/dependabot.yml` | Weekly grouped pip + Actions updates |
-| `.github/workflows/dependabot-constraints.yml` | On Dependabot PRs only: regenerate `agent_foundry/constraints/*.txt` from the lock and push onto the Dependabot branch |
-
-The constraints workflow uses `pull_request_target`. Keep the `if:` guard
-that restricts it to `dependabot[bot]` on this repository; do not run
-untrusted PR code with that token.
+`.github/dependabot.yml` opens weekly grouped GitHub Actions updates only.
+Python dependencies get alerts but no Dependabot PRs; see
+[Dependabot](#6-dependabot) in the checklist.
 
 ### Composite actions you will likely edit
 
@@ -128,7 +124,7 @@ workflow will fail closed.
 
 ### 1. Runners
 
-All four workflows set:
+All three workflows set:
 
 ```yaml
 runs-on:
@@ -154,18 +150,17 @@ Jobs need:
 Upstream CI cannot reach public `pypi.org`. Installs go through the package index
 (`PyPI`) via GitHub OIDC. Forks almost always need to retarget this.
 
-Three places currently name Databricks's index:
+Two places currently name Databricks's index:
 
 | Location | What to change |
 |----------|----------------|
 | `env.INDEX_OIDC_URL` and `env.PYPI_INDEX` in `ci.yml`, `acceptance.yml`, `acceptance-janitor.yml` | Your token-exchange URL and simple index |
 | `.github/actions/package-index-auth/action.yml` | `machine` in `~/.netrc`, OIDC `audience`, and `provider_name` must match **your** registry's GitHub OIDC app |
-| `.github/dependabot.yml` `registries.python-proxy` | Dependabot's resolver. Today this is `https://pypi.org/simple`, **not** the package index |
 
 `uv.lock` records the index each package was fetched from (hundreds of
 `registry = "https://pypi.org/simple"` lines). After
-you point uv at your mirror, regenerate the lock (`uv lock`) so CI and
-Dependabot agree. Hashed installs (`--require-hashes`) need
+you point uv at your mirror, regenerate the lock (`uv lock`) so CI
+agrees. Hashed installs (`--require-hashes`) need
 **byte-identical** artifacts; a mirror that rebuilds wheels will fail
 `uv pip sync`.
 
@@ -193,8 +188,6 @@ stay; it only needs `UV_INDEX_URL` / `--default-index` and `~/.netrc`.
 1. Delete the the package index auth step from every job (or make it a no-op).
 2. Point `uv pip sync` at `https://pypi.org/simple` (or omit
    `--default-index`).
-3. In `.github/dependabot.yml`, delete the `registries:` block and the
-   `registries:` key under the `pip` ecosystem.
 
 Local developer machines need the same index (uv/pip config). Otherwise
 `uv lock` on a laptop will rewrite `uv.lock` back to public PyPI.
@@ -334,11 +327,13 @@ SHA that has a green acceptance run.
 
 ### 6. Dependabot
 
-1. Retarget `registries.python-proxy.url` (or delete the block — see
-   [Package index](#2-package-index--your-pypi-mirror) variant C).
-2. Confirm the GitHub App can open PRs against the fork.
-3. Leave `dependabot-constraints.yml`'s `dependabot[bot]` + same-repo
-   guard in place.
+1. Confirm the GitHub App can open GitHub Actions update PRs against the
+   fork.
+2. Keep Dependabot alerts on, but turn off **Dependabot security updates**
+   (Settings → Code security). Its Python PRs bump one package without its
+   exact-pinned siblings or the lock-derived App constraints. Fix alerts
+   with an override in `pyproject.toml`, `uv lock`, and
+   `python -m agent_foundry.constraints.export`.
 
 ### 7. Generated app-repo templates
 

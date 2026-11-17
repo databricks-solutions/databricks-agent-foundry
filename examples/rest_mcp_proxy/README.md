@@ -8,6 +8,10 @@ agent (or the Assistant) can attach to it.
 This example fronts the **public GitHub REST API**, which needs no credentials
 for public data, so it deploys and works end-to-end with zero secrets.
 
+Pick it when you want agents to call a REST API as governed MCP tools without
+writing a server. It is the second payload next to `agent`; pair it with an
+agent instance (see [Consume it from an agent](#consume-it-from-an-agent)).
+
 ## What gets deployed
 
 - **One Databricks App** running the `rest_mcp` payload (a Streamable-HTTP MCP

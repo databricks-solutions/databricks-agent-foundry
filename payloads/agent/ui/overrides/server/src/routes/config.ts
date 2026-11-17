@@ -66,6 +66,12 @@ function isChartsEnabled(): boolean {
   return envFlag('ENABLE_CHARTS');
 }
 
+// Mirrors spec.ui.reports. Gates the client report-card fence; when off a
+// report renders as a plain code block.
+function isReportsEnabled(): boolean {
+  return envFlag('ENABLE_REPORTS');
+}
+
 // Mirrors spec.ui.feedback. Feedback additionally requires an MLflow
 // experiment to log to, so both must be present for the affordance to show.
 function isFeedbackEnabled(): boolean {
@@ -125,6 +131,7 @@ configRouter.get('/', async (req: Request, res: Response) => {
       fileUpload: isFileUploadEnabled(),
       imageInput: isImageInputEnabled(),
       charts: isChartsEnabled(),
+      reports: isReportsEnabled(),
       toolOutputExpanded: isToolOutputExpanded(),
       chatWidth: chatMaxWidth(),
       resourcesSidebar: isResourcesSidebarEnabled(),

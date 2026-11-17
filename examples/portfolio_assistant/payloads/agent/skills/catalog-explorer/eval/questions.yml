@@ -1,19 +1,19 @@
 questions:
   - input: "How many tables are in system.information_schema?"
     expected_tools:
-      - catalog_genie
+      - genie_ask
     expected_output_contains:
       - "tables"
 
   - input: "What data types are used in system.information_schema.tables?"
     expected_tools:
-      - catalog_genie
+      - genie_ask
     expected_output_contains:
       - "data type"
 
   - input: "Which tables have the most columns?"
     expected_tools:
-      - catalog_genie
+      - genie_ask
     expected_output_contains:
       - "columns"
 

@@ -92,6 +92,16 @@ class TestUserSkillLoader:
         assert "Do it." in response
 
     @pytest.mark.asyncio
+    async def test_records_the_skill_id_as_span_input(self) -> None:
+        loader = UserSkillLoader(parse_user_skills(_inputs(_skill("a")), LIMITS).skills, None)
+
+        with patch("mlflow.start_span") as start_span:
+            await loader(None, json.dumps({"skill_id": "lakebase:a"}))
+
+        span = start_span.return_value.__enter__.return_value
+        span.set_inputs.assert_called_once_with({"skill_id": "lakebase:a"})
+
+    @pytest.mark.asyncio
     async def test_refuses_skills_not_picked_this_request(self) -> None:
         loader = UserSkillLoader(parse_user_skills(_inputs(_skill("a")), LIMITS).skills, None)
 

@@ -18,11 +18,16 @@ def parse_csv(data: bytes, max_rows: int) -> tuple[str, bool]:
     stream = io.StringIO(data.decode("utf-8", errors="replace"))
     rows: list[list[str]] = []
     truncated = False
-    for index, row in enumerate(csv.reader(stream)):
-        if index >= max_rows:
-            truncated = True
-            break
-        rows.append([_cell_to_str(value) for value in row])
+    # ``csv.Error`` (e.g. NUL bytes or stray newlines from a binary file
+    # renamed ``.csv``) is a user-safe rejection, not an unexpected crash.
+    try:
+        for index, row in enumerate(csv.reader(stream)):
+            if index >= max_rows:
+                truncated = True
+                break
+            rows.append([_cell_to_str(value) for value in row])
+    except csv.Error as exc:
+        raise ExtractionError(f"file is not valid CSV: {exc}") from exc
     return _rows_to_markdown(rows), truncated
 
 

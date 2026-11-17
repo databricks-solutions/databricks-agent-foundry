@@ -236,6 +236,9 @@ tags:
 # ---------------------------------------------------------------------------
 
 # File arrival (UC Volume / cloud storage path)
+# For document ingestion into a Vector Search source table (parse + chunk
+# uploaded files with ai_parse_document / ai_prep_search, then sync the
+# index), start from examples/portfolio_assistant/jobs/docs_ingest.
 trigger:
   file_arrival:
     url: "/Volumes/${var.catalog}/${var.schema_prefix}_indexes/docs_sources/"

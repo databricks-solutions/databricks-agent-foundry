@@ -53,7 +53,8 @@ payload:
         #   - module: "payloads/rest_mcp/tools/example.py"
 
         # Optional Unity AI Gateway governance layer (Beta). The external UC
-        # connection remains usable if the preview is unavailable.
+        # connection remains usable if the preview is unavailable. Agents use
+        # the service only when they pin it; see the paired server.yml.
         # mcp_service:
         #   enabled: true
         #   catalog: "${var.catalog}"

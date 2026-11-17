@@ -6,6 +6,11 @@
 --   - Synthetic or seed data that doesn't derive from existing tables
 --   - ETL output that must be materialized for performance
 --
+-- This example is shaped as a document-chunk table: one row per chunk, the
+-- layout written by an ai_parse_document + ai_prep_search ingestion job (see
+-- examples/portfolio_assistant/jobs/docs_ingest). Index it with
+-- primary_key chunk_id and embedding source column chunk_to_embed.
+--
 -- Multi-statement files are supported. Statements are split on ';' and
 -- executed sequentially via the Statement Execution API.
 --
@@ -13,21 +18,44 @@
 
 -- 1. Create the table with Change Data Feed enabled.
 --    CDF is required for Delta Sync Vector Search indexes.
+--    IF NOT EXISTS (not OR REPLACE) so redeploys keep ingested rows.
 CREATE TABLE IF NOT EXISTS `${var.catalog}`.`${var.schema}`.docs (
-  id INT,
-  content STRING,
+  chunk_id STRING,
+  doc_uri STRING,
   source STRING,
+  chunk_position INT,
+  content STRING,
+  chunk_to_embed STRING,
+  page_number INT,
+  image_uri STRING,
   category STRING,
-  doc_uri STRING
+  source_modified_at TIMESTAMP
 ) USING DELTA
 TBLPROPERTIES (delta.enableChangeDataFeed = true);
 
--- 2. Idempotent reload: truncate before inserting seed data.
---    Remove this if your table is populated by an upstream pipeline.
-TRUNCATE TABLE `${var.catalog}`.`${var.schema}`.docs;
-
--- 3. Insert seed rows.
-INSERT INTO `${var.catalog}`.`${var.schema}`.docs VALUES
-(1, 'Unity Catalog provides centralized governance for data and AI assets.', 'docs/unity-catalog', 'governance', '/Volumes/${var.catalog}/${var.schema}/example_sources/unity-catalog.pdf'),
-(2, 'Delta Lake brings ACID transactions to data lakes.', 'docs/delta-lake', 'storage', '/Volumes/${var.catalog}/${var.schema}/example_sources/delta-lake.pdf'),
-(3, 'Databricks SQL is a serverless data warehouse on the Lakehouse.', 'docs/dbsql', 'analytics', '/Volumes/${var.catalog}/${var.schema}/example_sources/dbsql.pdf');
+-- 2. Idempotent seed rows. Remove this if an ingestion job fills the table.
+MERGE INTO `${var.catalog}`.`${var.schema}`.docs AS t
+USING (
+  SELECT * FROM VALUES
+    ('Unity Catalog provides centralized governance for data and AI assets.', 'unity-catalog.pdf', 'governance'),
+    ('Delta Lake brings ACID transactions to data lakes.', 'delta-lake.pdf', 'storage'),
+    ('Databricks SQL is a serverless data warehouse on the Lakehouse.', 'dbsql.pdf', 'analytics')
+    AS seed(content, source, category)
+) AS s
+ON t.chunk_id = concat('seed:', s.source)
+WHEN MATCHED THEN UPDATE SET
+  t.content = s.content,
+  t.chunk_to_embed = s.content,
+  t.category = s.category
+WHEN NOT MATCHED THEN INSERT
+  (chunk_id, doc_uri, source, chunk_position, content, chunk_to_embed, page_number, category)
+VALUES (
+  concat('seed:', s.source),
+  concat('/Volumes/${var.catalog}/${var.schema}/example_sources/', s.source),
+  s.source,
+  0,
+  s.content,
+  s.content,
+  1,
+  s.category
+);
